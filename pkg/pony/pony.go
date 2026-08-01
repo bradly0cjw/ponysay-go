@@ -78,15 +78,26 @@ func (p *Pony) RenderPonyWithBalloon(balloonLines []string, linkChar, linkColor 
 	coloredLink := color.ApplyColor(linkChar, linkColor)
 
 	var output []string
-	output = append(output, balloonLines...)
+	balloonInserted := false
 
 	for _, line := range p.BodyLines {
-		processedLine := balloonTagRegex.ReplaceAllString(line, "")
-		processedLine = strings.ReplaceAll(processedLine, "$\\$", coloredLink)
-
-		if strings.TrimSpace(processedLine) != "" || len(output) > len(balloonLines) {
-			output = append(output, processedLine)
+		if balloonTagRegex.MatchString(line) {
+			if !balloonInserted {
+				output = append(output, balloonLines...)
+				balloonInserted = true
+			}
+			continue
 		}
+
+		processedLine := strings.ReplaceAll(line, "$\\$", coloredLink)
+		output = append(output, processedLine)
+	}
+
+	if !balloonInserted {
+		var newOutput []string
+		newOutput = append(newOutput, balloonLines...)
+		newOutput = append(newOutput, output...)
+		output = newOutput
 	}
 
 	return strings.Join(output, "\n")
