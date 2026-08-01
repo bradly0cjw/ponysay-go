@@ -26,12 +26,25 @@ Download the latest prebuilt binary for your platform directly from [GitHub Rele
 - **Linux**: `ponysay-linux-amd64` / `ponysay-linux-arm64`
 - **Windows**: `ponysay-windows-amd64.exe` / `ponysay-windows-arm64.exe`
 
+#### Global Installation (Linux / macOS)
+
+To install `ponysay` and `ponythink` globally in your system `$PATH`:
+
 ```bash
-# Example for Linux amd64
+# 1. Download binary (e.g. Linux amd64 or macOS arm64)
 curl -L -o ponysay https://github.com/bradly0cjw/ponysay-go/releases/latest/download/ponysay-linux-amd64
+
+# 2. Make executable and move to /usr/local/bin
 chmod +x ponysay
-ln -s ponysay ponythink
+sudo mv ponysay /usr/local/bin/ponysay
+
+# 3. Create global symlink for ponythink
+sudo ln -sf /usr/local/bin/ponysay /usr/local/bin/ponythink
 ```
+
+#### Windows Installation
+
+Download `ponysay-windows-amd64.exe`, rename it to `ponysay.exe`, and move it to a folder in your System `PATH` (such as `C:\Windows` or a custom tools directory). Create a copy named `ponythink.exe` for thought balloons.
 
 ### Option 2: Build from Source
 
