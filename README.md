@@ -1,6 +1,8 @@
 # ponysay-go
 
-High-performance, zero-dependency, cross-platform Go port of ponysay (cowsay reimplementation for ponies).
+Cross-platform Go port of [ponysay](https://github.com/erkin/ponysay) (cowsay reimplementation for ponies).
+
+> **Disclaimer**: This is a personal project created strictly for fun. The maintainer is not responsible for maintaining, updating, or providing ongoing support for this repository.
 
 ---
 
@@ -192,6 +194,6 @@ go test -v ./...
 
 ---
 
-## License
+## Disclaimer
 
-GPL-3.0 License.
+This is a personal project created strictly for fun. The maintainer is not responsible for maintaining, updating, or fixing issues with this repository.

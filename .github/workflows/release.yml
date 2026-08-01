@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build binaries
+        run: |
+          mkdir -p build
+          
+          # Extract version from tag name (e.g. v1.0.0)
+          VERSION=${{ github.ref_name }}
+          echo "Building binaries for version: $VERSION"
+          
+          # macOS amd64 & arm64
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.commitHash=$VERSION" -o build/agycli-statusline-darwin-amd64
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.commitHash=$VERSION" -o build/agycli-statusline-darwin-arm64
+          
+          # Linux amd64 & arm64
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.commitHash=$VERSION" -o build/agycli-statusline-linux-amd64
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.commitHash=$VERSION" -o build/agycli-statusline-linux-arm64
+          
+          # Windows amd64 & arm64
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.commitHash=$VERSION" -o build/agycli-statusline-windows-amd64.exe
+          GOOS=windows GOARCH=arm64 go build -ldflags="-s -w -X main.commitHash=$VERSION" -o build/agycli-statusline-windows-arm64.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/agycli-statusline-darwin-amd64
+            build/agycli-statusline-darwin-arm64
+            build/agycli-statusline-linux-amd64
+            build/agycli-statusline-linux-arm64
+            build/agycli-statusline-windows-amd64.exe
+            build/agycli-statusline-windows-arm64.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
