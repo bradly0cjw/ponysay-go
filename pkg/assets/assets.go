@@ -196,7 +196,7 @@ func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, er
 	}
 
 	if name == "" {
-		name = "unicode"
+		name = "cowsay"
 	}
 	cleanName := strings.TrimSuffix(name, ext)
 
@@ -206,7 +206,7 @@ func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, er
 		return string(data), nil
 	}
 
-	data, err = embeddedFS.ReadFile(filepath.Join("assets/balloons", "unicode"+ext))
+	data, err = embeddedFS.ReadFile(filepath.Join("assets/balloons", "cowsay"+ext))
 	if err == nil {
 		return string(data), nil
 	}

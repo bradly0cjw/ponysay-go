@@ -37,13 +37,13 @@ func ParseBalloon(content string, isThink bool) *Balloon {
 			}
 		}
 		return &Balloon{
-			Link: "╲", LinkMirror: "╱", LinkCross: "╳",
-			WW: "│  ", EE: "  │",
-			NW: []string{"┌", "│"}, NNW: []string{"─", " "}, N: []string{"─", " "}, NNE: []string{"─", " "}, NE: []string{"┐", "│"},
-			NEE: "  │", E: "  │", SEE: "  │",
-			SE: []string{"│", "┘"}, SSE: []string{" ", "─"}, S: []string{" ", "─"}, SSW: []string{" ", "─"}, SW: []string{"│", "└"},
-			SWW: "│  ", W: "│  ", NWW: "│  ",
-			MinWidth: 6, MinHeight: 2,
+			Link: "\\", LinkMirror: "/", LinkCross: "X",
+			WW: "< ", EE: " >",
+			NW: []string{" _"}, NNW: []string{"_"}, N: []string{"_"}, NNE: []string{"_"}, NE: []string{"_ "},
+			NEE: " \\", E: " |", SEE: " /",
+			SE: []string{"- "}, SSE: []string{"-"}, S: []string{"-"}, SSW: []string{"-"}, SW: []string{" -"},
+			SWW: "\\ ", W: "| ", NWW: "/ ",
+			MinWidth: 4, MinHeight: 2,
 		}
 	}
 

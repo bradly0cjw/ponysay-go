@@ -29,16 +29,7 @@ func TestFormatBalloonTemplate(t *testing.T) {
 	msgLines := []string{"I am just the cutest pony!"}
 	result := b.FormatBalloon(msgLines, 0, 0, "")
 
-	if len(result) < 5 {
-		t.Fatalf("Formatted balloon should have at least 5 lines (border + top empty + msg + bottom empty + border)")
-	}
-
-	// Verify top border starts with ┌
-	if !testing.Verbose() {
-		t.Logf("Line 0: %s", result[0])
-		t.Logf("Line 1: %s", result[1])
-		t.Logf("Line 2: %s", result[2])
-		t.Logf("Line 3: %s", result[3])
-		t.Logf("Line 4: %s", result[4])
+	if len(result) < 3 {
+		t.Fatalf("Formatted balloon should have at least 3 lines, got %d", len(result))
 	}
 }
