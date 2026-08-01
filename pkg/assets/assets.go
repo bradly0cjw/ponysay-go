@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -15,12 +16,15 @@ import (
 var embeddedFS embed.FS
 
 // AssetManager provides access to ponies, balloons, and quotes.
+// Supports a hybrid model: user local directories take precedence,
+// with embedded binary assets as default fallbacks.
 type AssetManager struct {
 	rnd          *rand.Rand
 	mu           sync.Mutex
-	aliasToQuote map[string]string            // e.g. "derpysit" -> "derpy"
-	quoteFiles   map[string][]string          // e.g. "derpy" -> ["assets/ponyquotes/derpy.0", "assets/ponyquotes/derpy.1", ...]
-	ponyAliases  map[string]map[string]bool   // e.g. "derpy" -> {"derpysit": true, "derpystand": true, ...}
+	aliasToQuote map[string]string
+	quoteFiles   map[string][]string
+	ponyAliases  map[string]map[string]bool
+	customDirs   []string
 	initialized  bool
 }
 
@@ -30,9 +34,33 @@ func NewAssetManager() *AssetManager {
 		aliasToQuote: make(map[string]string),
 		quoteFiles:   make(map[string][]string),
 		ponyAliases:  make(map[string]map[string]bool),
+		customDirs:   getSearchDirectories(),
 	}
 	am.initQuotes()
 	return am
+}
+
+func getSearchDirectories() []string {
+	var dirs []string
+	// Current working directory
+	if cwd, err := os.Getwd(); err == nil {
+		dirs = append(dirs, cwd)
+	}
+
+	// User config directory (~/.config/ponysay)
+	if userConfig, err := os.UserConfigDir(); err == nil {
+		dirs = append(dirs, filepath.Join(userConfig, "ponysay"))
+	}
+
+	// User home directory (~/.ponysay)
+	if home, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs, filepath.Join(home, ".ponysay"))
+	}
+
+	// System directories
+	dirs = append(dirs, "/usr/share/ponysay", "/usr/local/share/ponysay")
+
+	return dirs
 }
 
 func (am *AssetManager) initQuotes() {
@@ -44,52 +72,80 @@ func (am *AssetManager) initQuotes() {
 	}
 	am.initialized = true
 
-	// Read alias mapping file `assets/ponyquotes/ponies`
-	poniesMapData, err := embeddedFS.ReadFile("assets/ponyquotes/ponies")
-	if err == nil {
-		lines := strings.Split(string(poniesMapData), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
-			parts := strings.Split(line, "+")
-			if len(parts) == 0 {
-				continue
-			}
-			baseName := parts[0]
-			if _, ok := am.ponyAliases[baseName]; !ok {
-				am.ponyAliases[baseName] = make(map[string]bool)
-			}
-			for _, alias := range parts {
-				am.aliasToQuote[alias] = baseName
-				am.ponyAliases[baseName][alias] = true
-			}
+	// 1. Read alias mapping from embedded assets
+	if poniesMapData, err := embeddedFS.ReadFile("assets/ponyquotes/ponies"); err == nil {
+		am.parsePoniesAliasFile(string(poniesMapData))
+	}
+
+	// 2. Read custom ponies mapping if present on local FS
+	for _, baseDir := range am.customDirs {
+		pPath := filepath.Join(baseDir, "ponyquotes", "ponies")
+		if data, err := os.ReadFile(pPath); err == nil {
+			am.parsePoniesAliasFile(string(data))
 		}
 	}
 
-	// Index all quote files `assets/ponyquotes/<pony>.<num>`
-	entries, err := embeddedFS.ReadDir("assets/ponyquotes")
-	if err == nil {
+	// 3. Index embedded quote files
+	if entries, err := embeddedFS.ReadDir("assets/ponyquotes"); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() || entry.Name() == "ponies" {
 				continue
 			}
 			name := entry.Name()
-			dotIdx := strings.Index(name, ".")
-			if dotIdx > 0 {
+			if dotIdx := strings.Index(name, "."); dotIdx > 0 {
 				basePony := name[:dotIdx]
 				relPath := filepath.Join("assets/ponyquotes", name)
-				am.quoteFiles[basePony] = append(am.quoteFiles[basePony], relPath)
+				am.quoteFiles[basePony] = append(am.quoteFiles[basePony], "embed:"+relPath)
 				if _, exists := am.aliasToQuote[basePony]; !exists {
 					am.aliasToQuote[basePony] = basePony
 				}
 			}
 		}
 	}
+
+	// 4. Index local FS custom quote files
+	for _, baseDir := range am.customDirs {
+		qDir := filepath.Join(baseDir, "ponyquotes")
+		if entries, err := os.ReadDir(qDir); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() || entry.Name() == "ponies" {
+					continue
+				}
+				name := entry.Name()
+				if dotIdx := strings.Index(name, "."); dotIdx > 0 {
+					basePony := name[:dotIdx]
+					absPath := filepath.Join(qDir, name)
+					am.quoteFiles[basePony] = append(am.quoteFiles[basePony], "file:"+absPath)
+				}
+			}
+		}
+	}
+}
+
+func (am *AssetManager) parsePoniesAliasFile(content string) {
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.Split(line, "+")
+		if len(parts) == 0 {
+			continue
+		}
+		baseName := parts[0]
+		if _, ok := am.ponyAliases[baseName]; !ok {
+			am.ponyAliases[baseName] = make(map[string]bool)
+		}
+		for _, alias := range parts {
+			am.aliasToQuote[alias] = baseName
+			am.ponyAliases[baseName][alias] = true
+		}
+	}
 }
 
 // GetPonyFile finds and reads the content of a pony file by name.
+// First checks local user folders, then falls back to embedded binary assets.
 func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, string, error) {
 	if name == "" {
 		return am.GetRandomPonyFile(allowsNonMLP)
@@ -97,22 +153,34 @@ func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, str
 
 	cleanName := strings.TrimSuffix(name, ".pony")
 
-	dirs := []string{"assets/ponies", "assets/ttyponies"}
+	dirs := []string{"ponies", "ttyponies"}
 	if allowsNonMLP {
-		dirs = append([]string{"assets/extraponies", "assets/extrattyponies"}, dirs...)
+		dirs = append([]string{"extraponies", "extrattyponies"}, dirs...)
 	} else {
-		dirs = append(dirs, "assets/extraponies", "assets/extrattyponies")
+		dirs = append(dirs, "extraponies", "extrattyponies")
 	}
 
-	for _, dir := range dirs {
-		path := filepath.Join(dir, cleanName+".pony")
+	// 1. Check local custom directories on disk
+	for _, baseDir := range am.customDirs {
+		for _, subDir := range dirs {
+			diskPath := filepath.Join(baseDir, subDir, cleanName+".pony")
+			data, err := os.ReadFile(diskPath)
+			if err == nil {
+				return cleanName, string(data), nil
+			}
+		}
+	}
+
+	// 2. Fall back to embedded binary assets
+	for _, subDir := range dirs {
+		path := filepath.Join("assets", subDir, cleanName+".pony")
 		data, err := embeddedFS.ReadFile(path)
 		if err == nil {
 			return cleanName, string(data), nil
 		}
 	}
 
-	// Try case-insensitive or partial alias match
+	// 3. Try case-insensitive alias match
 	allPonies := am.ListPonies(allowsNonMLP, true)
 	for _, p := range allPonies {
 		if strings.EqualFold(p, cleanName) {
@@ -136,17 +204,36 @@ func (am *AssetManager) GetRandomPonyFile(allowsNonMLP bool) (string, string, er
 	return am.GetPonyFile(chosen, allowsNonMLP)
 }
 
-// ListPonies returns sorted list of available pony names.
+// ListPonies returns sorted list of available pony names (combining local FS & embedded).
 func (am *AssetManager) ListPonies(allowsNonMLP bool, includeExtra bool) []string {
 	seen := make(map[string]bool)
 
-	dirs := []string{"assets/ponies"}
+	dirs := []string{"ponies"}
 	if allowsNonMLP || includeExtra {
-		dirs = append(dirs, "assets/extraponies")
+		dirs = append(dirs, "extraponies")
 	}
 
-	for _, dir := range dirs {
-		entries, err := embeddedFS.ReadDir(dir)
+	// Local FS directories
+	for _, baseDir := range am.customDirs {
+		for _, subDir := range dirs {
+			diskDir := filepath.Join(baseDir, subDir)
+			entries, err := os.ReadDir(diskDir)
+			if err != nil {
+				continue
+			}
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pony") {
+					name := strings.TrimSuffix(entry.Name(), ".pony")
+					seen[name] = true
+				}
+			}
+		}
+	}
+
+	// Embedded FS directories
+	for _, subDir := range dirs {
+		embedDir := filepath.Join("assets", subDir)
+		entries, err := embeddedFS.ReadDir(embedDir)
 		if err != nil {
 			continue
 		}
@@ -200,6 +287,15 @@ func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, er
 	}
 	cleanName := strings.TrimSuffix(name, ext)
 
+	// 1. Check local FS
+	for _, baseDir := range am.customDirs {
+		diskPath := filepath.Join(baseDir, "balloons", cleanName+ext)
+		if data, err := os.ReadFile(diskPath); err == nil {
+			return string(data), nil
+		}
+	}
+
+	// 2. Check embedded assets
 	path := filepath.Join("assets/balloons", cleanName+ext)
 	data, err := embeddedFS.ReadFile(path)
 	if err == nil {
@@ -220,15 +316,33 @@ func (am *AssetManager) ListBalloons(isThink bool) []string {
 	if isThink {
 		ext = ".think"
 	}
-	entries, err := embeddedFS.ReadDir("assets/balloons")
-	if err != nil {
-		return nil
-	}
-	var list []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ext) {
-			list = append(list, strings.TrimSuffix(e.Name(), ext))
+	seen := make(map[string]bool)
+
+	for _, baseDir := range am.customDirs {
+		diskDir := filepath.Join(baseDir, "balloons")
+		entries, err := os.ReadDir(diskDir)
+		if err != nil {
+			continue
 		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ext) {
+				seen[strings.TrimSuffix(e.Name(), ext)] = true
+			}
+		}
+	}
+
+	entries, err := embeddedFS.ReadDir("assets/balloons")
+	if err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ext) {
+				seen[strings.TrimSuffix(e.Name(), ext)] = true
+			}
+		}
+	}
+
+	var list []string
+	for k := range seen {
+		list = append(list, k)
 	}
 	sort.Strings(list)
 	return list
@@ -249,8 +363,7 @@ func (am *AssetManager) ListQuoters() []string {
 	return quoters
 }
 
-// GetPonyQuote selects a quote and corresponding pony name for given target pony choices.
-// If choices is empty, picks a random pony from all quoters.
+// GetPonyQuote selects a quote and corresponding pony name.
 func (am *AssetManager) GetPonyQuote(choices []string) (string, string, error) {
 	am.mu.Lock()
 	defer am.mu.Unlock()
@@ -267,7 +380,6 @@ func (am *AssetManager) GetPonyQuote(choices []string) (string, string, error) {
 			baseQuoteKey = cleanTarget
 		}
 	} else {
-		// Pick random quoter
 		quoters := make([]string, 0, len(am.quoteFiles))
 		for q, files := range am.quoteFiles {
 			if len(files) > 0 {
@@ -286,8 +398,16 @@ func (am *AssetManager) GetPonyQuote(choices []string) (string, string, error) {
 		return targetPony, "Zecora! Help me, I am mute!", nil
 	}
 
-	chosenFile := files[am.rnd.Intn(len(files))]
-	data, err := embeddedFS.ReadFile(chosenFile)
+	chosenSpec := files[am.rnd.Intn(len(files))]
+	var data []byte
+	var err error
+
+	if strings.HasPrefix(chosenSpec, "embed:") {
+		data, err = embeddedFS.ReadFile(strings.TrimPrefix(chosenSpec, "embed:"))
+	} else if strings.HasPrefix(chosenSpec, "file:") {
+		data, err = os.ReadFile(strings.TrimPrefix(chosenSpec, "file:"))
+	}
+
 	if err != nil {
 		return targetPony, "Zecora! Help me, I am mute!", nil
 	}
