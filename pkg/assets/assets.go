@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -15,12 +16,76 @@ var embeddedFS embed.FS
 
 // AssetManager provides access to ponies, balloons, and quotes.
 type AssetManager struct {
-	rnd *rand.Rand
+	rnd          *rand.Rand
+	mu           sync.Mutex
+	aliasToQuote map[string]string            // e.g. "derpysit" -> "derpy"
+	quoteFiles   map[string][]string          // e.g. "derpy" -> ["assets/ponyquotes/derpy.0", "assets/ponyquotes/derpy.1", ...]
+	ponyAliases  map[string]map[string]bool   // e.g. "derpy" -> {"derpysit": true, "derpystand": true, ...}
+	initialized  bool
 }
 
 func NewAssetManager() *AssetManager {
-	return &AssetManager{
-		rnd: rand.New(rand.NewSource(time.Now().UnixNano())),
+	am := &AssetManager{
+		rnd:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		aliasToQuote: make(map[string]string),
+		quoteFiles:   make(map[string][]string),
+		ponyAliases:  make(map[string]map[string]bool),
+	}
+	am.initQuotes()
+	return am
+}
+
+func (am *AssetManager) initQuotes() {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	if am.initialized {
+		return
+	}
+	am.initialized = true
+
+	// Read alias mapping file `assets/ponyquotes/ponies`
+	poniesMapData, err := embeddedFS.ReadFile("assets/ponyquotes/ponies")
+	if err == nil {
+		lines := strings.Split(string(poniesMapData), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.Split(line, "+")
+			if len(parts) == 0 {
+				continue
+			}
+			baseName := parts[0]
+			if _, ok := am.ponyAliases[baseName]; !ok {
+				am.ponyAliases[baseName] = make(map[string]bool)
+			}
+			for _, alias := range parts {
+				am.aliasToQuote[alias] = baseName
+				am.ponyAliases[baseName][alias] = true
+			}
+		}
+	}
+
+	// Index all quote files `assets/ponyquotes/<pony>.<num>`
+	entries, err := embeddedFS.ReadDir("assets/ponyquotes")
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() || entry.Name() == "ponies" {
+				continue
+			}
+			name := entry.Name()
+			dotIdx := strings.Index(name, ".")
+			if dotIdx > 0 {
+				basePony := name[:dotIdx]
+				relPath := filepath.Join("assets/ponyquotes", name)
+				am.quoteFiles[basePony] = append(am.quoteFiles[basePony], relPath)
+				if _, exists := am.aliasToQuote[basePony]; !exists {
+					am.aliasToQuote[basePony] = basePony
+				}
+			}
+		}
 	}
 }
 
@@ -47,6 +112,7 @@ func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, str
 		}
 	}
 
+	// Try case-insensitive or partial alias match
 	allPonies := am.ListPonies(allowsNonMLP, true)
 	for _, p := range allPonies {
 		if strings.EqualFold(p, cleanName) {
@@ -59,6 +125,9 @@ func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, str
 
 // GetRandomPonyFile picks a random pony.
 func (am *AssetManager) GetRandomPonyFile(allowsNonMLP bool) (string, string, error) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
 	ponies := am.ListPonies(allowsNonMLP, false)
 	if len(ponies) == 0 {
 		return "", "", fmt.Errorf("no ponies available")
@@ -94,6 +163,28 @@ func (am *AssetManager) ListPonies(allowsNonMLP bool, includeExtra bool) []strin
 		result = append(result, k)
 	}
 	sort.Strings(result)
+	return result
+}
+
+// ListPoniesWithAliases returns pony names formatted with alternative names (aliases).
+func (am *AssetManager) ListPoniesWithAliases(allowsNonMLP bool, includeExtra bool) []string {
+	basePonies := am.ListPonies(allowsNonMLP, includeExtra)
+	var result []string
+
+	for _, p := range basePonies {
+		if aliasesMap, ok := am.ponyAliases[p]; ok && len(aliasesMap) > 1 {
+			var altList []string
+			for alt := range aliasesMap {
+				if alt != p {
+					altList = append(altList, alt)
+				}
+			}
+			sort.Strings(altList)
+			result = append(result, fmt.Sprintf("%s (%s)", p, strings.Join(altList, ", ")))
+		} else {
+			result = append(result, p)
+		}
+	}
 	return result
 }
 
@@ -143,55 +234,68 @@ func (am *AssetManager) ListBalloons(isThink bool) []string {
 	return list
 }
 
-// GetPonyQuote returns a random quote for a given pony.
-func (am *AssetManager) GetPonyQuote(ponyName string) (string, string, error) {
-	entries, err := embeddedFS.ReadDir("assets/ponyquotes")
-	if err != nil || len(entries) == 0 {
-		return "", "", fmt.Errorf("no quotes available")
-	}
+// ListQuoters returns sorted list of all ponies that have quotes.
+func (am *AssetManager) ListQuoters() []string {
+	am.mu.Lock()
+	defer am.mu.Unlock()
 
-	var candidates []string
-	if ponyName != "" {
-		target := strings.ToLower(strings.TrimSuffix(ponyName, ".quote"))
-		for _, e := range entries {
-			if strings.EqualFold(strings.TrimSuffix(e.Name(), ".quote"), target) {
-				candidates = append(candidates, e.Name())
-			}
+	var quoters []string
+	for ponyName, files := range am.quoteFiles {
+		if len(files) > 0 {
+			quoters = append(quoters, ponyName)
 		}
 	}
+	sort.Strings(quoters)
+	return quoters
+}
 
-	if len(candidates) == 0 {
-		for _, e := range entries {
-			if strings.HasSuffix(e.Name(), ".quote") {
-				candidates = append(candidates, e.Name())
+// GetPonyQuote selects a quote and corresponding pony name for given target pony choices.
+// If choices is empty, picks a random pony from all quoters.
+func (am *AssetManager) GetPonyQuote(choices []string) (string, string, error) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	var targetPony string
+	var baseQuoteKey string
+
+	if len(choices) > 0 {
+		targetPony = choices[am.rnd.Intn(len(choices))]
+		cleanTarget := strings.ToLower(strings.TrimSuffix(targetPony, ".pony"))
+		if base, ok := am.aliasToQuote[cleanTarget]; ok {
+			baseQuoteKey = base
+		} else {
+			baseQuoteKey = cleanTarget
+		}
+	} else {
+		// Pick random quoter
+		quoters := make([]string, 0, len(am.quoteFiles))
+		for q, files := range am.quoteFiles {
+			if len(files) > 0 {
+				quoters = append(quoters, q)
 			}
 		}
+		if len(quoters) == 0 {
+			return "derpy", "Zecora! Help me, I am mute!", nil
+		}
+		baseQuoteKey = quoters[am.rnd.Intn(len(quoters))]
+		targetPony = baseQuoteKey
 	}
 
-	if len(candidates) == 0 {
-		return "", "", fmt.Errorf("no quotes found for %s", ponyName)
+	files, ok := am.quoteFiles[baseQuoteKey]
+	if !ok || len(files) == 0 {
+		return targetPony, "Zecora! Help me, I am mute!", nil
 	}
 
-	chosenFile := candidates[am.rnd.Intn(len(candidates))]
-	data, err := embeddedFS.ReadFile(filepath.Join("assets/ponyquotes", chosenFile))
+	chosenFile := files[am.rnd.Intn(len(files))]
+	data, err := embeddedFS.ReadFile(chosenFile)
 	if err != nil {
-		return "", "", err
+		return targetPony, "Zecora! Help me, I am mute!", nil
 	}
 
-	quotes := strings.Split(string(data), "\n%\n")
-	var validQuotes []string
-	for _, q := range quotes {
-		trimmed := strings.TrimSpace(q)
-		if trimmed != "" {
-			validQuotes = append(validQuotes, trimmed)
-		}
+	quoteText := strings.TrimSpace(string(data))
+	if quoteText == "" {
+		quoteText = "Zecora! Help me, I am mute!"
 	}
 
-	if len(validQuotes) == 0 {
-		return "", "", fmt.Errorf("empty quote file %s", chosenFile)
-	}
-
-	quote := validQuotes[am.rnd.Intn(len(validQuotes))]
-	pName := strings.TrimSuffix(chosenFile, ".quote")
-	return pName, quote, nil
+	return targetPony, quoteText, nil
 }
