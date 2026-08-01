@@ -72,26 +72,52 @@ func ParsePony(name, rawContent string) (*Pony, error) {
 // RenderPonyWithBalloon combines the formatted balloon lines with the pony art lines.
 func (p *Pony) RenderPonyWithBalloon(balloonLines []string, linkChar, linkColor string) string {
 	if len(balloonLines) == 0 {
-		return strings.Join(p.BodyLines, "\n")
+		return p.RenderPonyOnly()
 	}
 
 	coloredLink := color.ApplyColor(linkChar, linkColor)
 
 	var output []string
-	// Prepend balloon lines at top
 	output = append(output, balloonLines...)
 
 	for _, line := range p.BodyLines {
-		// Strip $balloon...$ tags from pony body lines so literal tags don't print
 		processedLine := balloonTagRegex.ReplaceAllString(line, "")
-
-		// Replace stem placeholders $\$ with actual stem character
 		processedLine = strings.ReplaceAll(processedLine, "$\\$", coloredLink)
 
-		// Also handle escaped \$ link characters
 		if strings.TrimSpace(processedLine) != "" || len(output) > len(balloonLines) {
 			output = append(output, processedLine)
 		}
+	}
+
+	return strings.Join(output, "\n")
+}
+
+// RenderPonyOnly returns pony artwork only, slicing off balloon stem lines.
+func (p *Pony) RenderPonyOnly() string {
+	lines := p.BodyLines
+	topCut := 0
+
+	if len(lines) > 0 && balloonTagRegex.MatchString(lines[0]) {
+		topCut = 1 + p.BalloonTop
+	} else if p.BalloonTop > 0 {
+		topCut = p.BalloonTop
+	}
+
+	if topCut > len(lines) {
+		topCut = len(lines)
+	}
+
+	lines = lines[topCut:]
+
+	if p.BalloonBottom > 0 && p.BalloonBottom <= len(lines) {
+		lines = lines[:len(lines)-p.BalloonBottom]
+	}
+
+	var output []string
+	for _, line := range lines {
+		clean := balloonTagRegex.ReplaceAllString(line, "")
+		clean = strings.ReplaceAll(clean, "$\\$", "")
+		output = append(output, clean)
 	}
 
 	return strings.Join(output, "\n")
