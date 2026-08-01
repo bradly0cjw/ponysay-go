@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for the release (e.g. v0.0.1)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -30,8 +37,11 @@ jobs:
         run: |
           mkdir -p build
           
-          # Extract version from tag name (e.g. v1.0.0)
-          VERSION=${{ github.ref_name }}
+          # Extract version from input tag_name or git ref_name (e.g. v1.0.0)
+          VERSION="${{ inputs.tag_name }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="${{ github.ref_name }}"
+          fi
           echo "Building binaries for version: $VERSION"
           
           # macOS amd64 & arm64
@@ -49,6 +59,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
           files: |
             build/ponysay-darwin-amd64
             build/ponysay-darwin-arm64
@@ -60,3 +71,4 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

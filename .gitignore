@@ -1,6 +1,6 @@
 # Binaries
-ponysay
-ponythink
+/ponysay
+/ponythink
 *.exe
 *.exe.test
 *.out
