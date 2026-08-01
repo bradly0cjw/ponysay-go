@@ -107,6 +107,26 @@ go install github.com/bradly0cjw/ponysay-go/cmd/ponysay@latest
 
 ---
 
+## Uninstallation
+
+To completely remove `ponysay` and `ponythink`:
+
+### Linux & macOS (Bash / Zsh)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bradly0cjw/ponysay-go/mane/uninstall.sh | bash
+```
+
+*(Or run `sudo ./uninstall.sh` if installed globally to `/usr/local/bin`)*
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/bradly0cjw/ponysay-go/mane/uninstall.ps1 | iex
+```
+
+---
+
 ## Basic Usage & Command Examples
 
 ### Speech Balloon (ponysay)
