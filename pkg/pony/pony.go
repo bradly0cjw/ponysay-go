@@ -1,12 +1,14 @@
 package pony
 
 import (
-	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"ponysay-go/pkg/color"
 )
+
+var balloonTagRegex = regexp.MustCompile(`\$balloon[0-9a-zA-Z,]*\$`)
 
 // Pony represents a parsed pony artwork file.
 type Pony struct {
@@ -76,21 +78,20 @@ func (p *Pony) RenderPonyWithBalloon(balloonLines []string, linkChar, linkColor 
 	coloredLink := color.ApplyColor(linkChar, linkColor)
 
 	var output []string
+	// Prepend balloon lines at top
 	output = append(output, balloonLines...)
 
 	for _, line := range p.BodyLines {
-		// Replace balloon stem placeholders: $balloon0$, $balloon1$, etc. or $\$
-		processedLine := line
-		if strings.Contains(processedLine, "$balloon") {
-			// Replace all $balloon[0-9]+$ or $\$
-			for i := 0; i <= 20; i++ {
-				placeholder := fmt.Sprintf("$balloon%d$", i)
-				processedLine = strings.ReplaceAll(processedLine, placeholder, coloredLink)
-			}
-		}
+		// Strip $balloon...$ tags from pony body lines so literal tags don't print
+		processedLine := balloonTagRegex.ReplaceAllString(line, "")
+
+		// Replace stem placeholders $\$ with actual stem character
 		processedLine = strings.ReplaceAll(processedLine, "$\\$", coloredLink)
 
-		output = append(output, processedLine)
+		// Also handle escaped \$ link characters
+		if strings.TrimSpace(processedLine) != "" || len(output) > len(balloonLines) {
+			output = append(output, processedLine)
+		}
 	}
 
 	return strings.Join(output, "\n")

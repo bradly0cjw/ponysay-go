@@ -12,11 +12,11 @@ type Balloon struct {
 	LinkMirror string
 	LinkCross  string
 
-	WW, EE           string
+	WW, EE              string
 	NW, NNW, N, NNE, NE []string
-	NEE, E, SEE      string
+	NEE, E, SEE         string
 	SE, SSE, S, SSW, SW []string
-	SWW, W, NWW      string
+	SWW, W, NWW         string
 
 	MinWidth  int
 	MinHeight int
@@ -37,13 +37,13 @@ func ParseBalloon(content string, isThink bool) *Balloon {
 			}
 		}
 		return &Balloon{
-			Link: "\\", LinkMirror: "/", LinkCross: "X",
-			WW: "< ", EE: " >",
-			NW: []string{" _"}, NNW: []string{"_"}, N: []string{"_"}, NNE: []string{"_"}, NE: []string{"_ "},
-			NEE: " \\", E: " |", SEE: " /",
-			SE: []string{"- "}, SSE: []string{"-"}, S: []string{"-"}, SSW: []string{"-"}, SW: []string{" -"},
-			SWW: "\\ ", W: "| ", NWW: "/ ",
-			MinWidth: 4, MinHeight: 2,
+			Link: "╲", LinkMirror: "╱", LinkCross: "╳",
+			WW: "│  ", EE: "  │",
+			NW: []string{"┌", "│"}, NNW: []string{"─", " "}, N: []string{"─", " "}, NNE: []string{"─", " "}, NE: []string{"┐", "│"},
+			NEE: "  │", E: "  │", SEE: "  │",
+			SE: []string{"│", "┘"}, SSE: []string{" ", "─"}, S: []string{" ", "─"}, SSW: []string{" ", "─"}, SW: []string{"│", "└"},
+			SWW: "│  ", W: "│  ", NWW: "│  ",
+			MinWidth: 6, MinHeight: 2,
 		}
 	}
 
@@ -88,27 +88,27 @@ func ParseBalloon(content string, isThink bool) *Balloon {
 	}
 
 	b := &Balloon{
-		Link:       getSingle("\\", "\\"),
-		LinkMirror: getSingle("/", "/"),
-		LinkCross:  getSingle("X", "X"),
-		WW:         getSingle("ww", "< "),
-		EE:         getSingle("ee", " >"),
-		NW:         getList("nw", []string{" _"}),
-		NNW:        getList("nnw", []string{"_"}),
-		N:          getList("n", []string{"_"}),
-		NNE:        getList("nne", []string{"_"}),
-		NE:         getList("ne", []string{"_ "}),
-		NEE:        getSingle("nee", " \\"),
-		E:          getSingle("e", " |"),
-		SEE:        getSingle("see", " /"),
-		SE:         getList("se", []string{"- "}),
-		SSE:        getList("sse", []string{"-"}),
-		S:          getList("s", []string{"-"}),
-		SSW:        getList("ssw", []string{"-"}),
-		SW:         getList("sw", []string{" - text"}),
-		SWW:        getSingle("sww", "\\ "),
-		W:          getSingle("w", "| "),
-		NWW:        getSingle("nww", "/ "),
+		Link:       getSingle("\\", "╲"),
+		LinkMirror: getSingle("/", "╱"),
+		LinkCross:  getSingle("X", "╳"),
+		WW:         getSingle("ww", "│  "),
+		EE:         getSingle("ee", "  │"),
+		NW:         getList("nw", []string{"┌", "│"}),
+		NNW:        getList("nnw", []string{"─", " "}),
+		N:          getList("n", []string{"─", " "}),
+		NNE:        getList("nne", []string{"─", " "}),
+		NE:         getList("ne", []string{"┐", "│"}),
+		NEE:        getSingle("nee", "  │"),
+		E:          getSingle("e", "  │"),
+		SEE:        getSingle("see", "  │"),
+		SE:         getList("se", []string{"│", "┘"}),
+		SSE:        getList("sse", []string{" ", "─"}),
+		S:          getList("s", []string{" ", "─"}),
+		SSW:        getList("ssw", []string{" ", "─"}),
+		SW:         getList("sw", []string{"│", "└"}),
+		SWW:        getSingle("sww", "│  "),
+		W:          getSingle("w", "│  "),
+		NWW:        getSingle("nww", "│  "),
 	}
 
 	b.MinWidth = color.DisplayWidth(b.WW) + color.DisplayWidth(b.EE)
@@ -157,8 +157,10 @@ func WrapText(msg string, wrapWidth int) []string {
 	return wrapped
 }
 
-// FormatBalloon draws the bubble around the message lines.
-func (b *Balloon) FormatBalloon(lines []string, minWidth, minHeight int, balloonColor string) []string {
+// FormatBalloon draws the bubble around the message lines following original ponysay logic.
+func (b *Balloon) FormatBalloon(inputLines []string, minWidth, minHeight int, balloonColor string) []string {
+	lines := inputLines
+
 	maxMsgWidth := 0
 	for _, l := range lines {
 		w := color.DisplayWidth(l)
@@ -168,29 +170,33 @@ func (b *Balloon) FormatBalloon(lines []string, minWidth, minHeight int, balloon
 	}
 
 	contentWidth := maxMsgWidth
-	if contentWidth+b.MinWidth < minWidth {
-		contentWidth = minWidth - b.MinWidth
+	w := b.MinWidth + contentWidth
+	if w < minWidth {
+		w = minWidth
+		contentWidth = w - b.MinWidth
 	}
 
-	w := b.MinWidth + contentWidth
-
-	var ws, es map[int]string
 	numLines := len(lines)
+	ws := make(map[int]string)
+	es := make(map[int]string)
+
 	if numLines > 1 {
-		ws = map[int]string{0: b.NWW, numLines - 1: b.SWW}
-		es = map[int]string{0: b.NEE, numLines - 1: b.SEE}
+		ws[0] = b.NWW
+		es[0] = b.NEE
+		ws[numLines-1] = b.SWW
+		es[numLines-1] = b.SEE
 		for j := 1; j < numLines-1; j++ {
 			ws[j] = b.W
 			es[j] = b.E
 		}
 	} else {
-		ws = map[int]string{0: b.WW}
-		es = map[int]string{0: b.EE}
+		ws[0] = b.WW
+		es[0] = b.EE
 	}
 
 	var result []string
 
-	// Top border
+	// 1. Top border (including any multi-line top margin defined in balloon file)
 	for j := 0; j < len(b.N); j++ {
 		nwStr := b.NW[j]
 		neStr := b.NE[j]
@@ -218,7 +224,7 @@ func (b *Balloon) FormatBalloon(lines []string, minWidth, minHeight int, balloon
 		result = append(result, color.ApplyColor(line, balloonColor))
 	}
 
-	// Message body
+	// 2. Message body with left/right edges
 	for j, msgLine := range lines {
 		lWidth := color.DisplayWidth(msgLine)
 		padding := contentWidth - lWidth
@@ -232,7 +238,7 @@ func (b *Balloon) FormatBalloon(lines []string, minWidth, minHeight int, balloon
 		result = append(result, leftEdge+msgLine+strings.Repeat(" ", padding)+rightEdge)
 	}
 
-	// Bottom border
+	// 3. Bottom border (including any multi-line bottom margin defined in balloon file)
 	for j := 0; j < len(b.S); j++ {
 		swStr := b.SW[j]
 		seStr := b.SE[j]
