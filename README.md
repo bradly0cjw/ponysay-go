@@ -18,19 +18,34 @@ Cross-platform Go port of [ponysay](https://github.com/erkin/ponysay) (cowsay re
 
 ## Installation
 
-### Option 1: Build from Source
+### Option 1: Direct Download Prebuilt Binary via Release (Recommended)
+
+Download the latest prebuilt binary for your platform directly from [GitHub Releases](https://github.com/bradly0cjw/ponysay-go/releases):
+
+- **macOS**: `ponysay-darwin-amd64` / `ponysay-darwin-arm64`
+- **Linux**: `ponysay-linux-amd64` / `ponysay-linux-arm64`
+- **Windows**: `ponysay-windows-amd64.exe` / `ponysay-windows-arm64.exe`
 
 ```bash
-git clone https://github.com/cypone/ponysay-go.git
+# Example for Linux amd64
+curl -L -o ponysay https://github.com/bradly0cjw/ponysay-go/releases/latest/download/ponysay-linux-amd64
+chmod +x ponysay
+ln -s ponysay ponythink
+```
+
+### Option 2: Build from Source
+
+```bash
+git clone https://github.com/bradly0cjw/ponysay-go.git
 cd ponysay-go
 go build -o ponysay ./cmd/ponysay
 ln -s ponysay ponythink
 ```
 
-### Option 2: Install via Go CLI
+### Option 3: Install via Go CLI
 
 ```bash
-go install ponysay-go/cmd/ponysay@latest
+go install github.com/bradly0cjw/ponysay-go/cmd/ponysay@latest
 ```
 
 ---
