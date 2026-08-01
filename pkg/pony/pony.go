@@ -1,0 +1,97 @@
+package pony
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"ponysay-go/pkg/color"
+)
+
+// Pony represents a parsed pony artwork file.
+type Pony struct {
+	Name          string
+	Metadata      map[string]string
+	BalloonTop    int
+	BalloonBottom int
+	BodyLines     []string
+}
+
+// ParsePony parses the raw content of a .pony file.
+func ParsePony(name, rawContent string) (*Pony, error) {
+	p := &Pony{
+		Name:     name,
+		Metadata: make(map[string]string),
+	}
+
+	content := strings.ReplaceAll(rawContent, "\r\n", "\n")
+	lines := strings.Split(content, "\n")
+
+	bodyStartIndex := 0
+	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "$$$" {
+		endIdx := -1
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) == "$$$" {
+				endIdx = i
+				break
+			}
+		}
+
+		if endIdx != -1 {
+			for _, metaLine := range lines[1:endIdx] {
+				idx := strings.Index(metaLine, ":")
+				if idx > 0 {
+					key := strings.TrimSpace(metaLine[:idx])
+					val := strings.TrimSpace(metaLine[idx+1:])
+					p.Metadata[key] = val
+				}
+			}
+			bodyStartIndex = endIdx + 1
+		}
+	}
+
+	p.BodyLines = lines[bodyStartIndex:]
+
+	if topStr, ok := p.Metadata["BALLOON TOP"]; ok {
+		if topVal, err := strconv.Atoi(topStr); err == nil {
+			p.BalloonTop = topVal
+		}
+	}
+
+	if botStr, ok := p.Metadata["BALLOON BOTTOM"]; ok {
+		if botVal, err := strconv.Atoi(botStr); err == nil {
+			p.BalloonBottom = botVal
+		}
+	}
+
+	return p, nil
+}
+
+// RenderPonyWithBalloon combines the formatted balloon lines with the pony art lines.
+func (p *Pony) RenderPonyWithBalloon(balloonLines []string, linkChar, linkColor string) string {
+	if len(balloonLines) == 0 {
+		return strings.Join(p.BodyLines, "\n")
+	}
+
+	coloredLink := color.ApplyColor(linkChar, linkColor)
+
+	var output []string
+	output = append(output, balloonLines...)
+
+	for _, line := range p.BodyLines {
+		// Replace balloon stem placeholders: $balloon0$, $balloon1$, etc. or $\$
+		processedLine := line
+		if strings.Contains(processedLine, "$balloon") {
+			// Replace all $balloon[0-9]+$ or $\$
+			for i := 0; i <= 20; i++ {
+				placeholder := fmt.Sprintf("$balloon%d$", i)
+				processedLine = strings.ReplaceAll(processedLine, placeholder, coloredLink)
+			}
+		}
+		processedLine = strings.ReplaceAll(processedLine, "$\\$", coloredLink)
+
+		output = append(output, processedLine)
+	}
+
+	return strings.Join(output, "\n")
+}
