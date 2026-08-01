@@ -133,6 +133,18 @@ ponysay -f derpy -i  # Print metadata info of Derpy
 ponysay -f derpy -o  # Print artwork only without speech balloon
 ```
 
+### Updating ponysay
+
+```bash
+# Fetch and install the latest release directly from GitHub
+ponysay update
+
+# Alternatively using ponythink or flags
+ponythink update
+ponysay -u
+ponysay --update
+```
+
 ---
 
 ## Custom Assets & User Overrides (Hybrid Model)
@@ -181,6 +193,7 @@ ponysay -f mycustompony "Hello world!"
 | `--256-colours` | `-X` | Enable 256 color mode |
 | `--tty-colours` | `-V` | Enable TTY 16 color mode |
 | `--kms-colours` | `-K` | Enable KMS color mode |
+| `--update` / `update` | `-u` | Update to the latest release from GitHub |
 | `--version` | `-v` | Print version information |
 | `--help` | `-h` | Display help menu |
 

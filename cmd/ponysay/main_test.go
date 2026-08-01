@@ -99,4 +99,12 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 	if !strings.Contains(string(thinkOut), "(") && !strings.Contains(string(thinkOut), "o") {
 		t.Errorf("ponythink failed")
 	}
+
+	// 13. Test Help output containing update command
+	helpCmd := exec.Command("./ponysay_test_bin", "-h")
+	helpOut, _ := helpCmd.CombinedOutput()
+	if !strings.Contains(string(helpOut), "update") {
+		t.Errorf("-h help output missing update command description")
+	}
 }
+

@@ -15,9 +15,20 @@ import (
 	"ponysay-go/pkg/color"
 	"ponysay-go/pkg/pony"
 	"ponysay-go/pkg/term"
+	"ponysay-go/pkg/update"
 )
 
-const version = "ponysay-go v1.0.0"
+var (
+	version    = "v1.0.0"
+	commitHash = "dev"
+)
+
+func getVersionString() string {
+	if commitHash != "" && commitHash != "dev" {
+		return fmt.Sprintf("ponysay-go %s", commitHash)
+	}
+	return fmt.Sprintf("ponysay-go %s", version)
+}
 
 type stringSliceFlag []string
 
@@ -58,6 +69,7 @@ func main() {
 	var infoLevel int // 0: off, 1: --info, 2: ++info
 	var showVersion bool
 	var showHelp bool
+	var doUpdate bool
 
 	var colorMode string // "256", "tty", "kms"
 	var balloonColor string
@@ -135,20 +147,25 @@ func main() {
 	flagSet.BoolVar(&showHelp, "h", false, "Print help message")
 	flagSet.BoolVar(&showHelp, "help", false, "Print help message")
 
+	flagSet.BoolVar(&doUpdate, "u", false, "Update to latest release from GitHub")
+	flagSet.BoolVar(&doUpdate, "update", false, "Update to latest release from GitHub")
+
 	flagSet.StringVar(&balloonColor, "colour-bubble", "", "Color of balloon border")
 	flagSet.StringVar(&balloonColor, "colour-balloon", "", "Color of balloon border")
 	flagSet.StringVar(&linkColor, "colour-link", "", "Color of link stem")
 	flagSet.StringVar(&msgColor, "colour-msg", "", "Color of message text")
 	flagSet.StringVar(&msgColor, "colour-message", "", "Color of message text")
 
-	// Pre-process custom arguments (+f, +l, +L, +A, ++info, +c, --f, --q, etc.)
+	// Pre-process custom arguments (+f, +l, +L, +A, ++info, +c, --f, --q, update, etc.)
 	args := os.Args[1:]
 	var processedArgs []string
 	quoteModeRequested := false
 
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "+l" || arg == "++list" {
+		if arg == "update" || arg == "-u" || arg == "--update" {
+			doUpdate = true
+		} else if arg == "+l" || arg == "++list" {
 			listNonMLP = true
 		} else if arg == "+L" || arg == "++symlist" || arg == "++altlist" {
 			listNonMLPAliases = true
@@ -217,6 +234,14 @@ func main() {
 
 	_ = flagSet.Parse(processedArgs)
 
+	if doUpdate {
+		if err := update.SelfUpdate(getVersionString(), update.DefaultRepo); err != nil {
+			fmt.Fprintf(os.Stderr, "Update error: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if color256 {
 		colorMode = "256"
 	} else if colorTTY {
@@ -236,7 +261,7 @@ func main() {
 	}
 
 	if showVersion {
-		fmt.Println(version)
+		fmt.Println(getVersionString())
 		os.Exit(0)
 	}
 
@@ -418,6 +443,7 @@ func printHelp(isThink bool) {
 	fmt.Println("Usage:")
 	fmt.Printf("  %s [-f PONY] [-b STYLE] [-W COLUMN] [message]\n", cmdName)
 	fmt.Printf("  %s -q [PONY]*\n", cmdName)
+	fmt.Printf("  %s update | -u | --update\n", cmdName)
 	fmt.Printf("  %s -l | -L | +l | +L | -A | +A | -B | --quoters | -i | -v | -h\n\n", cmdName)
 	fmt.Println("Options:")
 	fmt.Println("  -f, --file PONY    Select a pony by name or file.")
@@ -444,6 +470,9 @@ func printHelp(isThink bool) {
 	fmt.Println("  -X, --256-colours  256 color mode.")
 	fmt.Println("  -V, --tty-colours  TTY 16 color mode.")
 	fmt.Println("  -K, --kms-colours  KMS color mode.")
+	fmt.Println("  -u, --update       Update to the latest release from GitHub.")
+	fmt.Println("  update             Update to the latest release from GitHub.")
 	fmt.Println("  -v, --version      Print version information.")
 	fmt.Println("  -h, --help         Print this help message.")
 }
+
