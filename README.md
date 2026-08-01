@@ -18,17 +18,28 @@ Cross-platform Go port of [ponysay](https://github.com/erkin/ponysay) (cowsay re
 
 ## Installation
 
-### Option 1: Direct Download Prebuilt Binary via Release (Recommended)
+### Option 1: Quick Install Script (Recommended)
 
-Download the latest prebuilt binary for your platform directly from [GitHub Releases](https://github.com/bradly0cjw/ponysay-go/releases):
+Run the automated installer script, which detects your OS and architecture automatically:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bradly0cjw/ponysay-go/mane/install.sh | bash
+```
+
+- **With Root / Admin Privileges** (`sudo` or write access to `/usr/local/bin`): Installs `ponysay` and `ponythink` globally to `/usr/local/bin`.
+- **Without Root Privileges** (Non-admin): Installs `ponysay` and `ponythink` locally to `~/.local/bin`.
+
+---
+
+### Option 2: Manual Installation via Prebuilt Release
+
+Download the latest prebuilt binary for your platform from [GitHub Releases](https://github.com/bradly0cjw/ponysay-go/releases):
 
 - **macOS**: `ponysay-darwin-amd64` / `ponysay-darwin-arm64`
 - **Linux**: `ponysay-linux-amd64` / `ponysay-linux-arm64`
 - **Windows**: `ponysay-windows-amd64.exe` / `ponysay-windows-arm64.exe`
 
-#### Global Installation (Linux / macOS)
-
-To install `ponysay` and `ponythink` globally in your system `$PATH`:
+#### A. Global System Installation (With Root / Admin Privileges)
 
 ```bash
 # 1. Download binary (e.g. Linux amd64 or macOS arm64)
@@ -42,11 +53,32 @@ sudo mv ponysay /usr/local/bin/ponysay
 sudo ln -sf /usr/local/bin/ponysay /usr/local/bin/ponythink
 ```
 
-#### Windows Installation
+#### B. User Local Installation (Without Root / Non-Admin)
+
+If you don't have `root` or `sudo` access:
+
+```bash
+# 1. Create local binary directory
+mkdir -p ~/.local/bin
+
+# 2. Download binary (e.g. Linux amd64 or macOS arm64)
+curl -L -o ~/.local/bin/ponysay https://github.com/bradly0cjw/ponysay-go/releases/latest/download/ponysay-linux-amd64
+chmod +x ~/.local/bin/ponysay
+
+# 3. Create symlink for ponythink
+ln -sf ~/.local/bin/ponysay ~/.local/bin/ponythink
+
+# 4. Ensure ~/.local/bin is in your PATH (add to ~/.bashrc or ~/.zshrc if needed)
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+#### C. Windows Installation
 
 Download `ponysay-windows-amd64.exe`, rename it to `ponysay.exe`, and move it to a folder in your System `PATH` (such as `C:\Windows` or a custom tools directory). Create a copy named `ponythink.exe` for thought balloons.
 
-### Option 2: Build from Source
+---
+
+### Option 3: Build from Source
 
 ```bash
 git clone https://github.com/bradly0cjw/ponysay-go.git
@@ -55,7 +87,9 @@ go build -o ponysay ./cmd/ponysay
 ln -s ponysay ponythink
 ```
 
-### Option 3: Install via Go CLI
+---
+
+### Option 4: Install via Go CLI
 
 ```bash
 go install github.com/bradly0cjw/ponysay-go/cmd/ponysay@latest
