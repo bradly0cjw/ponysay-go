@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -94,7 +95,7 @@ func (am *AssetManager) initQuotes() {
 			name := entry.Name()
 			if dotIdx := strings.Index(name, "."); dotIdx > 0 {
 				basePony := name[:dotIdx]
-				relPath := filepath.Join("assets/ponyquotes", name)
+				relPath := path.Join("assets/ponyquotes", name)
 				am.quoteFiles[basePony] = append(am.quoteFiles[basePony], "embed:"+relPath)
 				if _, exists := am.aliasToQuote[basePony]; !exists {
 					am.aliasToQuote[basePony] = basePony
@@ -173,8 +174,8 @@ func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, str
 
 	// 2. Fall back to embedded binary assets
 	for _, subDir := range dirs {
-		path := filepath.Join("assets", subDir, cleanName+".pony")
-		data, err := embeddedFS.ReadFile(path)
+		embedPath := path.Join("assets", subDir, cleanName+".pony")
+		data, err := embeddedFS.ReadFile(embedPath)
 		if err == nil {
 			return cleanName, string(data), nil
 		}
@@ -232,7 +233,7 @@ func (am *AssetManager) ListPonies(allowsNonMLP bool, includeExtra bool) []strin
 
 	// Embedded FS directories
 	for _, subDir := range dirs {
-		embedDir := filepath.Join("assets", subDir)
+		embedDir := path.Join("assets", subDir)
 		entries, err := embeddedFS.ReadDir(embedDir)
 		if err != nil {
 			continue
@@ -296,13 +297,13 @@ func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, er
 	}
 
 	// 2. Check embedded assets
-	path := filepath.Join("assets/balloons", cleanName+ext)
-	data, err := embeddedFS.ReadFile(path)
+	embedPath := path.Join("assets/balloons", cleanName+ext)
+	data, err := embeddedFS.ReadFile(embedPath)
 	if err == nil {
 		return string(data), nil
 	}
 
-	data, err = embeddedFS.ReadFile(filepath.Join("assets/balloons", "cowsay"+ext))
+	data, err = embeddedFS.ReadFile(path.Join("assets/balloons", "cowsay"+ext))
 	if err == nil {
 		return string(data), nil
 	}
@@ -419,3 +420,4 @@ func (am *AssetManager) GetPonyQuote(choices []string) (string, string, error) {
 
 	return targetPony, quoteText, nil
 }
+

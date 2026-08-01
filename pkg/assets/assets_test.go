@@ -80,4 +80,14 @@ func TestAssetManagerQuotes(t *testing.T) {
 	if qPinkie == "" {
 		t.Errorf("Pinkie quote should not be empty")
 	}
+
+	// Test specific quote for Rara (Countess Coloratura)
+	pNameRara, qRara, err := am.GetPonyQuote([]string{"rara"})
+	if err != nil {
+		t.Fatalf("Failed to get Rara quote: %v", err)
+	}
+	if pNameRara != "rara" || qRara == "" {
+		t.Errorf("Expected quote pony to be rara, got %s: %s", pNameRara, qRara)
+	}
 }
+
