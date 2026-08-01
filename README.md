@@ -22,12 +22,21 @@ Cross-platform Go port of [ponysay](https://github.com/erkin/ponysay) (cowsay re
 
 Run the automated installer script, which detects your OS and architecture automatically:
 
+#### Linux & macOS (Bash / Zsh)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bradly0cjw/ponysay-go/mane/install.sh | bash
 ```
 
 - **With Root / Admin Privileges** (`sudo` or write access to `/usr/local/bin`): Installs `ponysay` and `ponythink` globally to `/usr/local/bin`.
 - **Without Root Privileges** (Non-admin): Installs `ponysay` and `ponythink` locally to `~/.local/bin`.
+
+#### Windows (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/bradly0cjw/ponysay-go/mane/install.ps1 | iex
+```
+
+- **With Administrator Privileges**: Installs `ponysay.exe` and `ponythink.exe` to `C:\Program Files\ponysay` and updates System `PATH`.
+- **Without Administrator Privileges**: Installs `ponysay.exe` and `ponythink.exe` to `%LocalAppData%\Programs\ponysay` and updates User `PATH`.
 
 ---
 
@@ -39,7 +48,7 @@ Download the latest prebuilt binary for your platform from [GitHub Releases](htt
 - **Linux**: `ponysay-linux-amd64` / `ponysay-linux-arm64`
 - **Windows**: `ponysay-windows-amd64.exe` / `ponysay-windows-arm64.exe`
 
-#### A. Global System Installation (With Root / Admin Privileges)
+#### A. Global System Installation (With Root / Admin Privileges - Linux / macOS)
 
 ```bash
 # 1. Download binary (e.g. Linux amd64 or macOS arm64)
@@ -53,7 +62,7 @@ sudo mv ponysay /usr/local/bin/ponysay
 sudo ln -sf /usr/local/bin/ponysay /usr/local/bin/ponythink
 ```
 
-#### B. User Local Installation (Without Root / Non-Admin)
+#### B. User Local Installation (Without Root / Non-Admin - Linux / macOS)
 
 If you don't have `root` or `sudo` access:
 
@@ -72,9 +81,10 @@ ln -sf ~/.local/bin/ponysay ~/.local/bin/ponythink
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-#### C. Windows Installation
+#### C. Windows Manual Installation
 
-Download `ponysay-windows-amd64.exe`, rename it to `ponysay.exe`, and move it to a folder in your System `PATH` (such as `C:\Windows` or a custom tools directory). Create a copy named `ponythink.exe` for thought balloons.
+- **With Administrator Privileges**: Move `ponysay-windows-amd64.exe` to `C:\Program Files\ponysay\ponysay.exe`, make a copy named `ponythink.exe`, and add `C:\Program Files\ponysay` to System `PATH`.
+- **Without Administrator Privileges**: Move `ponysay-windows-amd64.exe` to `%LocalAppData%\Programs\ponysay\ponysay.exe`, make a copy named `ponythink.exe`, and add `%LocalAppData%\Programs\ponysay` to User `PATH`.
 
 ---
 
