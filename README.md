@@ -1,32 +1,38 @@
 # ponysay-go
 
-> A high-performance, zero-dependency, cross-platform Go port of [`ponysay`](https://github.com/erkin/ponysay) (cowsay reimplementation for ponies).
-
-![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8?style=flat&logo=go)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20FreeBSD-blue)
-![License](https://img.shields.io/badge/license-GPLv3-green)
+High-performance, zero-dependency, cross-platform Go port of ponysay (cowsay reimplementation for ponies).
 
 ---
 
-## ✨ Features
+## Compatibility & Feature Support Matrix
 
-- 🚀 **Zero External Dependencies**: Single self-contained binary (`//go:embed` bundles all ~470+ pony art files, balloon styles, and quotes). No Python environment or `coreutils`/`stty` required.
-- ⚡ **Blazing Fast**: Sub-5ms startup time — perfect for shell startup scripts (`fortune | ponysay`).
-- 💻 **True Cross-Platform**: Native support for **Windows** (Command Prompt, PowerShell, Windows Terminal), **macOS**, **Linux**, and **FreeBSD** (`GOOS/GOARCH` support).
-- 🎨 **Full Color Support**: ANSI, 256-color, and 24-bit TrueColor display.
-- 💬 **Pony Quotes & Balloons**: Full support for speech balloons (`ponysay`), thought balloons (`ponythink`), quote databases (`-q`), custom balloon borders (`-b`), and word wrapping (`-W`).
+| Feature / Flag | Original Python Implementation | Go Port (`ponysay-go`) | Status |
+| :--- | :--- | :--- | :--- |
+| **Native Windows Support** | Requires WSL or Cygwin | Native `.exe` (cmd, PowerShell, Windows Terminal) | Supported |
+| **Dependencies** | Python 3, `coreutils` (`stty`), `setup.py` | Single self-contained binary (`//go:embed`) | Fully Self-Contained |
+| **Pony Selection** (`-f`, `+f`, `-F`) | Supported | Supported | 100% Compatible |
+| **Variadic Selection** (`--f`, `++f`, `--F`) | Supported | Supported | 100% Compatible |
+| **Show Pony Quotes** (`-q`, `--quote`, `--quotes`) | Supported | Supported (290+ pony quote files indexed) | 100% Compatible |
+| **Quoters Listing** (`--quoters`) | Supported | Supported | 100% Compatible |
+| **Pony Listing** (`-l`, `+l`, `-A`) | Supported | Supported | 100% Compatible |
+| **Alias Listing** (`-L`, `+L`, `+A`) | Supported | Supported | 100% Compatible |
+| **One-Line Listing** (`--onelist`, `++onelist`) | Supported | Supported | 100% Compatible |
+| **Balloon Listing** (`-B`, `--bubblelist`) | Supported | Supported | 100% Compatible |
+| **Thought Balloon** (`ponythink`) | Supported | Supported (binary alias / symlink) | 100% Compatible |
+| **Balloon Styles** (`-b cowsay`, `unicode`, `ascii`) | Supported | Supported (Default: `cowsay`) | 100% Compatible |
+| **Word Wrapping** (`-W`, `--wrap`) | Supported | Supported (`mattn/go-runewidth` ANSI-aware) | 100% Compatible |
+| **Message Compression** (`-c`, `--compress`) | Supported | Supported | 100% Compatible |
+| **Pony Only Output** (`-o`, `--pony-only`) | Supported | Supported | 100% Compatible |
+| **Pony Metadata Info** (`-i`, `+i`, `--info`) | Supported | Supported | 100% Compatible |
+| **Balloon & Link Colors** (`+c`, `--colour-*`) | Supported | Supported | 100% Compatible |
+| **Color Modes** (`-X` 256, `-V` TTY 16, `-K` KMS) | Supported | Supported | 100% Compatible |
+| **Terminal Width Detection** | Shell call `stty size` | Native OS syscalls via `golang.org/x/term` | Native & Cross-Platform |
 
 ---
 
-## 📦 Installation
+## Installation
 
-### Option 1: Via `go install` (Recommended)
-
-```bash
-go install ponysay-go/cmd/ponysay@latest
-```
-
-### Option 2: Build from Source
+### Option 1: Build from Source
 
 ```bash
 git clone https://github.com/cypone/ponysay-go.git
@@ -35,9 +41,15 @@ go build -o ponysay ./cmd/ponysay
 ln -s ponysay ponythink
 ```
 
+### Option 2: Go Install
+
+```bash
+go install ponysay-go/cmd/ponysay@latest
+```
+
 ---
 
-## 🚀 Usage
+## Usage Examples
 
 ### Basic Usage
 
@@ -52,7 +64,7 @@ ponysay -f pinkie "Partay!~"
 ponysay -f derpy "I brought muffins!"
 ```
 
-### Pony Fortune (Shell Startup)
+### Pony Fortune (Shell Startup Hook)
 
 Add this to your `~/.bashrc` or `~/.zshrc`:
 
@@ -60,56 +72,40 @@ Add this to your `~/.bashrc` or `~/.zshrc`:
 fortune | ponysay
 ```
 
-### Pony Quotes (`-q`)
+### Show Quotes (-q)
 
 ```bash
 ponysay -q pinkie
 ponysay -q
 ```
 
-### Thought Bubble (`ponythink`)
+### Thought Bubble (ponythink)
 
 ```bash
 ponythink "Hmm... is Golang fast?"
 ```
 
-### List Available Ponies & Balloons
+### Listing Options
 
 ```bash
 ponysay -l           # List MLP ponies
 ponysay +l          # List extra/non-MLP ponies
 ponysay -A          # List all ponies
+ponysay -L          # List ponies with alternative names
 ponysay -B          # List balloon styles
+ponysay --quoters   # List ponies that have quotes
 ```
 
 ---
 
-## 🛠️ Command-Line Options
+## Running Unit Tests
 
-| Option | Description |
-| :--- | :--- |
-| `-f`, `--file PONY` | Select a pony by name or file |
-| `+f PONY` | Select a non-MLP pony |
-| `-F PONY` | Select any pony (MLP or non-MLP) |
-| `-q`, `--quote [PONY]` | Select a pony quote |
-| `-b`, `--bubble STYLE` | Select balloon style (`unicode`, `cowsay`, `ascii`, `round`, etc.) |
-| `-W`, `--wrap COLUMN` | Specify maximum wrapping width |
-| `-l`, `--list` | List pony names |
-| `+l` | List non-MLP pony names |
-| `-A`, `--all` | List all pony names |
-| `-B`, `--bubblelist` | List balloon styles |
-| `-o`, `--pony-only` | Print only the pony artwork |
-| `-v`, `--version` | Print program version |
-| `-h`, `--help` | Display help menu |
+```bash
+go test -v ./...
+```
 
 ---
 
-## 🤝 Credits
-
-Based on the original [`ponysay`](https://github.com/erkin/ponysay) created by Erkin Batu Altunbaş, Mattias "maandree" Andrée, and contributors. Artwork created by respective authors listed within each pony file metadata.
-
----
-
-## 📜 License
+## License
 
 GPL-3.0 License.
