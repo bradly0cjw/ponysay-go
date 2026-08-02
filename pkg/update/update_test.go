@@ -1,7 +1,9 @@
 package update
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -63,3 +65,27 @@ func TestFetchLatestReleaseMock(t *testing.T) {
 		t.Errorf("unexpected assets: %+v", rel.Assets)
 	}
 }
+
+func TestProgressReader(t *testing.T) {
+	data := []byte("Hello, World! Testing progress bar reader.")
+	src := bytes.NewReader(data)
+	pr := newProgressReader(src, int64(len(data)))
+
+	buf := make([]byte, 10)
+	totalRead := 0
+	for {
+		n, err := pr.Read(buf)
+		totalRead += n
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("unexpected read error: %v", err)
+		}
+	}
+
+	if totalRead != len(data) {
+		t.Errorf("read %d bytes; want %d", totalRead, len(data))
+	}
+}
+

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -133,7 +134,13 @@ func SelfUpdate(currentVersion string, repo string) error {
 	tmpName := tmpFile.Name()
 	defer os.Remove(tmpName)
 
-	_, err = io.Copy(tmpFile, resp.Body)
+	totalBytes := resp.ContentLength
+	if totalBytes <= 0 {
+		totalBytes = assetSize
+	}
+
+	pr := newProgressReader(resp.Body, totalBytes)
+	_, err = io.Copy(tmpFile, pr)
 	_ = tmpFile.Close()
 	if err != nil {
 		return fmt.Errorf("failed to write updated binary: %w", err)
@@ -162,3 +169,71 @@ func SelfUpdate(currentVersion string, repo string) error {
 	fmt.Printf("Successfully updated ponysay to %s!\n", rel.TagName)
 	return nil
 }
+
+type progressReader struct {
+	reader     io.Reader
+	totalBytes int64
+	readBytes  int64
+	startTime  time.Time
+	lastPrint  time.Time
+}
+
+func newProgressReader(r io.Reader, totalBytes int64) *progressReader {
+	return &progressReader{
+		reader:     r,
+		totalBytes: totalBytes,
+		startTime:  time.Now(),
+	}
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	if n > 0 {
+		pr.readBytes += int64(n)
+		now := time.Now()
+		if now.Sub(pr.lastPrint) >= 100*time.Millisecond || err == io.EOF {
+			pr.lastPrint = now
+			pr.render()
+		}
+	}
+	if err == io.EOF {
+		fmt.Println()
+	}
+	return n, err
+}
+
+func (pr *progressReader) render() {
+	percent := float64(0)
+	if pr.totalBytes > 0 {
+		percent = (float64(pr.readBytes) / float64(pr.totalBytes)) * 100
+		if percent > 100 {
+			percent = 100
+		}
+	}
+
+	elapsed := time.Since(pr.startTime).Seconds()
+	speed := float64(0)
+	if elapsed > 0 {
+		speed = float64(pr.readBytes) / (1024 * 1024 * elapsed)
+	}
+
+	readMB := float64(pr.readBytes) / (1024 * 1024)
+	totalMB := float64(pr.totalBytes) / (1024 * 1024)
+
+	barWidth := 25
+	filled := 0
+	if pr.totalBytes > 0 {
+		filled = int((percent / 100) * float64(barWidth))
+		if filled > barWidth {
+			filled = barWidth
+		}
+	}
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+
+	if pr.totalBytes > 0 {
+		fmt.Printf("\r\x1b[KDownloading [%s] %5.1f%% (%.2f/%.2f MB) %.2f MB/s", bar, percent, readMB, totalMB, speed)
+	} else {
+		fmt.Printf("\r\x1b[KDownloading %.2f MB (%.2f MB/s)...", readMB, speed)
+	}
+}
+
