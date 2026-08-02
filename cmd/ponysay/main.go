@@ -365,12 +365,14 @@ func main() {
 
 	// Quote mode processing
 	if quoteModeRequested || len(quotePonies) > 0 {
-		pName, qText, err := am.GetPonyQuote(quotePonies)
+		qp := quotePonies
+		if len(qp) == 0 && selectedPony != "" {
+			qp = []string{selectedPony}
+		}
+		pName, qText, err := am.GetPonyQuote(qp)
 		if err == nil {
 			message = qText
-			if selectedPony == "" {
-				selectedPony = pName
-			}
+			selectedPony = pName
 		}
 	}
 

@@ -134,5 +134,12 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 	if posErr != nil || !strings.Contains(string(posOut), "Positional Test") {
 		t.Errorf("Positional argument before flags failed: %v, output: %s", posErr, string(posOut))
 	}
+
+	// 18. Test Fuzzy Quote Selection (-q fluter-shy)
+	fqCmd := exec.Command("./ponysay_test_bin", "-q", "fluter-shy")
+	fqOut, fqErr := fqCmd.CombinedOutput()
+	if fqErr != nil || strings.Contains(string(fqOut), "mute!") || len(fqOut) == 0 {
+		t.Errorf("Fuzzy quote selection failed: %v, output: %s", fqErr, string(fqOut))
+	}
 }
 

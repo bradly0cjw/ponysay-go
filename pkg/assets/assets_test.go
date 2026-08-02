@@ -89,6 +89,18 @@ func TestAssetManagerQuotes(t *testing.T) {
 	if pNameRara != "rara" || qRara == "" {
 		t.Errorf("Expected quote pony to be rara, got %s: %s", pNameRara, qRara)
 	}
+
+	// Test fuzzy search in quote lookup (e.g., fluter-shy -> fluttershy)
+	pNameFuzzy, qFuzzy, err := am.GetPonyQuote([]string{"fluter-shy"})
+	if err != nil {
+		t.Fatalf("Failed to get fuzzy quote for fluter-shy: %v", err)
+	}
+	if pNameFuzzy != "fluttershy" {
+		t.Errorf("Expected fuzzy quote pony to resolve to fluttershy, got %s", pNameFuzzy)
+	}
+	if qFuzzy == "" || qFuzzy == "Zecora! Help me, I am mute!" {
+		t.Errorf("Expected valid Fluttershy quote, got: %s", qFuzzy)
+	}
 }
 
 func TestAssetManagerConcurrency(t *testing.T) {

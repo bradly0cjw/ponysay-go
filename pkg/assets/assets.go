@@ -472,6 +472,10 @@ func (am *AssetManager) ListQuoters() []string {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
 
+	return am.listQuotersLocked()
+}
+
+func (am *AssetManager) listQuotersLocked() []string {
 	var quoters []string
 	for ponyName, files := range am.quoteFiles {
 		if len(files) > 0 {
@@ -480,6 +484,72 @@ func (am *AssetManager) ListQuoters() []string {
 	}
 	sort.Strings(quoters)
 	return quoters
+}
+
+func (am *AssetManager) resolveQuotePonyLocked(name string) string {
+	if name == "" {
+		return ""
+	}
+	name = am.RemapUCS(name)
+	cleanName := strings.ToLower(strings.TrimSuffix(name, ".pony"))
+
+	// 1. Direct match in aliasToQuote or quoteFiles
+	if base, ok := am.aliasToQuote[cleanName]; ok {
+		if files, ok2 := am.quoteFiles[base]; ok2 && len(files) > 0 {
+			return base
+		}
+	}
+	if files, ok := am.quoteFiles[cleanName]; ok && len(files) > 0 {
+		return cleanName
+	}
+
+	// 2. Case-insensitive check
+	if matchedName, ok := am.casePonyMap[cleanName]; ok {
+		cleanMatched := strings.ToLower(matchedName)
+		if base, ok := am.aliasToQuote[cleanMatched]; ok {
+			if files, ok2 := am.quoteFiles[base]; ok2 && len(files) > 0 {
+				return base
+			}
+		}
+		if files, ok := am.quoteFiles[cleanMatched]; ok && len(files) > 0 {
+			return cleanMatched
+		}
+	}
+
+	// 3. Fuzzy search against all available quoters
+	quoters := am.listQuotersLocked()
+	if len(quoters) > 0 {
+		corrector := NewSpelloCorrecter()
+		bestMatches, _ := corrector.Correct(cleanName, quoters)
+		if len(bestMatches) > 0 {
+			chosen := bestMatches[am.rnd.Intn(len(bestMatches))]
+			if base, ok := am.aliasToQuote[chosen]; ok {
+				return base
+			}
+			return chosen
+		}
+	}
+
+	// 4. Fuzzy search against all pony names
+	availablePonies := am.listPoniesLocked(true, false)
+	if len(availablePonies) > 0 {
+		corrector := NewSpelloCorrecter()
+		bestMatches, _ := corrector.Correct(cleanName, availablePonies)
+		if len(bestMatches) > 0 {
+			chosen := bestMatches[am.rnd.Intn(len(bestMatches))]
+			cleanChosen := strings.ToLower(chosen)
+			if base, ok := am.aliasToQuote[cleanChosen]; ok {
+				if files, ok2 := am.quoteFiles[base]; ok2 && len(files) > 0 {
+					return base
+				}
+			}
+			if files, ok := am.quoteFiles[cleanChosen]; ok && len(files) > 0 {
+				return cleanChosen
+			}
+		}
+	}
+
+	return cleanName
 }
 
 // GetPonyQuote selects a quote and corresponding pony name.
@@ -491,20 +561,11 @@ func (am *AssetManager) GetPonyQuote(choices []string) (string, string, error) {
 	var baseQuoteKey string
 
 	if len(choices) > 0 {
-		targetPony = choices[am.rnd.Intn(len(choices))]
-		cleanTarget := strings.ToLower(strings.TrimSuffix(targetPony, ".pony"))
-		if base, ok := am.aliasToQuote[cleanTarget]; ok {
-			baseQuoteKey = base
-		} else {
-			baseQuoteKey = cleanTarget
-		}
+		chosenChoice := choices[am.rnd.Intn(len(choices))]
+		baseQuoteKey = am.resolveQuotePonyLocked(chosenChoice)
+		targetPony = baseQuoteKey
 	} else {
-		quoters := make([]string, 0, len(am.quoteFiles))
-		for q, files := range am.quoteFiles {
-			if len(files) > 0 {
-				quoters = append(quoters, q)
-			}
-		}
+		quoters := am.listQuotersLocked()
 		if len(quoters) == 0 {
 			return "derpy", "Zecora! Help me, I am mute!", nil
 		}
