@@ -82,6 +82,13 @@ func SelfUpdate(currentVersion string, repo string) error {
 	fmt.Printf("Current version : %s\n", currentVersion)
 	fmt.Printf("Latest release  : %s (%s)\n", rel.TagName, rel.Name)
 
+	cleanCurrent := strings.TrimPrefix(strings.TrimPrefix(currentVersion, "ponysay-go "), "v")
+	cleanLatest := strings.TrimPrefix(rel.TagName, "v")
+	if cleanCurrent == cleanLatest {
+		fmt.Println("ponysay is already up to date.")
+		return nil
+	}
+
 	targetAsset := GetTargetAssetName(runtime.GOOS, runtime.GOARCH)
 	var downloadURL string
 	var assetSize int64
@@ -106,8 +113,6 @@ func SelfUpdate(currentVersion string, repo string) error {
 	if err != nil {
 		evalPath = execPath
 	}
-
-	fmt.Printf("Downloading %s (%.2f MB)...\n", targetAsset, float64(assetSize)/(1024*1024))
 
 	req, err := http.NewRequest("GET", downloadURL, nil)
 	if err != nil {
@@ -197,6 +202,10 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 		}
 	}
 	if err == io.EOF {
+		if pr.totalBytes > 0 {
+			pr.readBytes = pr.totalBytes
+		}
+		pr.render()
 		fmt.Println()
 	}
 	return n, err
