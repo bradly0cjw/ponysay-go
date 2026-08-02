@@ -91,3 +91,27 @@ func TestAssetManagerQuotes(t *testing.T) {
 	}
 }
 
+func TestAssetManagerConcurrency(t *testing.T) {
+	am := NewAssetManager()
+
+	done := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go func() {
+			for j := 0; j < 50; j++ {
+				_, _, _ = am.GetPonyFile("derpy", false)
+				_, _, _ = am.GetRandomPonyFile(false)
+				_ = am.ListPonies(true, true)
+				_, _ = am.GetBalloonContent("cowsay", false)
+				_ = am.ListBalloons(false)
+				_, _, _ = am.GetPonyQuote([]string{"pinkie"})
+			}
+			done <- true
+		}()
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+

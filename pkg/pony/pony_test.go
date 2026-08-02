@@ -51,3 +51,20 @@ $balloon5$
 		t.Errorf("Rendered pony should not be empty")
 	}
 }
+
+func BenchmarkRenderPonyWithBalloon(b *testing.B) {
+	raw := `$$$
+NAME: Test
+$$$
+$balloon5$
+     $\$
+  ▄▄▄▄▄▄▄
+  █ █ █ █`
+	p, _ := ParsePony("test", raw)
+	balloonLines := []string{"┌───┐", "│Hi │", "└───┘"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = p.RenderPonyWithBalloon(balloonLines, "╲", "")
+	}
+}
+

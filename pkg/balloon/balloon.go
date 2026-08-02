@@ -139,14 +139,19 @@ func WrapText(msg string, wrapWidth int) []string {
 		}
 
 		var current string
+		currentWidth := 0
 		for _, w := range words {
+			wWidth := color.DisplayWidth(w)
 			if current == "" {
 				current = w
-			} else if color.DisplayWidth(current+" "+w) <= wrapWidth {
+				currentWidth = wWidth
+			} else if currentWidth+1+wWidth <= wrapWidth {
 				current += " " + w
+				currentWidth += 1 + wWidth
 			} else {
 				wrapped = append(wrapped, current)
 				current = w
+				currentWidth = wWidth
 			}
 		}
 		if current != "" {
@@ -177,24 +182,20 @@ func (b *Balloon) FormatBalloon(inputLines []string, minWidth, minHeight int, ba
 	}
 
 	numLines := len(lines)
-	ws := make(map[int]string)
-	es := make(map[int]string)
-
-	if numLines > 1 {
-		ws[0] = b.NWW
-		es[0] = b.NEE
-		ws[numLines-1] = b.SWW
-		es[numLines-1] = b.SEE
-		for j := 1; j < numLines-1; j++ {
-			ws[j] = b.W
-			es[j] = b.E
+	getEdges := func(j int) (string, string) {
+		if numLines == 1 {
+			return b.WW, b.EE
 		}
-	} else {
-		ws[0] = b.WW
-		es[0] = b.EE
+		if j == 0 {
+			return b.NWW, b.NEE
+		}
+		if j == numLines-1 {
+			return b.SWW, b.SEE
+		}
+		return b.W, b.E
 	}
 
-	var result []string
+	result := make([]string, 0, len(b.N)+numLines+len(b.S))
 
 	// 1. Top border (including any multi-line top margin defined in balloon file)
 	for j := 0; j < len(b.N); j++ {
@@ -232,8 +233,9 @@ func (b *Balloon) FormatBalloon(inputLines []string, minWidth, minHeight int, ba
 			padding = 0
 		}
 
-		leftEdge := color.ApplyColor(ws[j], balloonColor)
-		rightEdge := color.ApplyColor(es[j], balloonColor)
+		wEdge, eEdge := getEdges(j)
+		leftEdge := color.ApplyColor(wEdge, balloonColor)
+		rightEdge := color.ApplyColor(eEdge, balloonColor)
 
 		result = append(result, leftEdge+msgLine+strings.Repeat(" ", padding)+rightEdge)
 	}
@@ -268,3 +270,4 @@ func (b *Balloon) FormatBalloon(inputLines []string, minWidth, minHeight int, ba
 
 	return result
 }
+

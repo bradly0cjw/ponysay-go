@@ -77,11 +77,11 @@ func (p *Pony) RenderPonyWithBalloon(balloonLines []string, linkChar, linkColor 
 
 	coloredLink := color.ApplyColor(linkChar, linkColor)
 
-	var output []string
+	output := make([]string, 0, len(p.BodyLines)+len(balloonLines))
 	balloonInserted := false
 
 	for _, line := range p.BodyLines {
-		if balloonTagRegex.MatchString(line) {
+		if strings.Contains(line, "$balloon") && balloonTagRegex.MatchString(line) {
 			if !balloonInserted {
 				output = append(output, balloonLines...)
 				balloonInserted = true
@@ -89,12 +89,15 @@ func (p *Pony) RenderPonyWithBalloon(balloonLines []string, linkChar, linkColor 
 			continue
 		}
 
-		processedLine := strings.ReplaceAll(line, "$\\$", coloredLink)
+		processedLine := line
+		if strings.Contains(line, "$\\$") {
+			processedLine = strings.ReplaceAll(line, "$\\$", coloredLink)
+		}
 		output = append(output, processedLine)
 	}
 
 	if !balloonInserted {
-		var newOutput []string
+		newOutput := make([]string, 0, len(balloonLines)+len(output))
 		newOutput = append(newOutput, balloonLines...)
 		newOutput = append(newOutput, output...)
 		output = newOutput
@@ -108,10 +111,12 @@ func (p *Pony) RenderPonyOnly() string {
 	lines := p.BodyLines
 	topCut := 0
 
-	if len(lines) > 0 && balloonTagRegex.MatchString(lines[0]) {
-		topCut = 1 + p.BalloonTop
-	} else if p.BalloonTop > 0 {
-		topCut = p.BalloonTop
+	if len(lines) > 0 {
+		if strings.Contains(lines[0], "$balloon") && balloonTagRegex.MatchString(lines[0]) {
+			topCut = 1 + p.BalloonTop
+		} else if p.BalloonTop > 0 {
+			topCut = p.BalloonTop
+		}
 	}
 
 	if topCut > len(lines) {
@@ -124,12 +129,18 @@ func (p *Pony) RenderPonyOnly() string {
 		lines = lines[:len(lines)-p.BalloonBottom]
 	}
 
-	var output []string
+	output := make([]string, 0, len(lines))
 	for _, line := range lines {
-		clean := balloonTagRegex.ReplaceAllString(line, "")
-		clean = strings.ReplaceAll(clean, "$\\$", "")
+		clean := line
+		if strings.Contains(clean, "$balloon") {
+			clean = balloonTagRegex.ReplaceAllString(clean, "")
+		}
+		if strings.Contains(clean, "$\\$") {
+			clean = strings.ReplaceAll(clean, "$\\$", "")
+		}
 		output = append(output, clean)
 	}
 
 	return strings.Join(output, "\n")
 }
+

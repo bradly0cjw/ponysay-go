@@ -11,11 +11,27 @@ var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // StripANSI removes all ANSI escape codes from a string.
 func StripANSI(s string) string {
+	if strings.IndexByte(s, '\x1b') == -1 {
+		return s
+	}
 	return ansiRegex.ReplaceAllString(s, "")
 }
 
 // DisplayWidth returns the visible terminal cell width of a string.
 func DisplayWidth(s string) int {
+	if strings.IndexByte(s, '\x1b') == -1 {
+		isASCII := true
+		for i := 0; i < len(s); i++ {
+			if s[i] >= 0x80 {
+				isASCII = false
+				break
+			}
+		}
+		if isASCII {
+			return len(s)
+		}
+	}
+
 	clean := StripANSI(s)
 	width := 0
 	for _, r := range clean {
@@ -26,6 +42,7 @@ func DisplayWidth(s string) int {
 	}
 	return width
 }
+
 
 // ApplyColor wraps text in ANSI color sequence if specified.
 func ApplyColor(text string, colorCode string) string {

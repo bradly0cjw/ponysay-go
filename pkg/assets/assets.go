@@ -13,18 +13,19 @@ import (
 	"time"
 )
 
-//go:embed all:assets
+//go:embed balloons extraponies extrattyponies ponies ponyquotes ttyponies
 var embeddedFS embed.FS
 
 // AssetManager provides access to ponies, balloons, and quotes.
 // Supports a hybrid model: user local directories take precedence,
 // with embedded binary assets as default fallbacks.
 type AssetManager struct {
+	mu             sync.RWMutex
 	rnd            *rand.Rand
-	mu             sync.Mutex
 	aliasToQuote   map[string]string
 	quoteFiles     map[string][]string
 	ponyAliases    map[string]map[string]bool
+	casePonyMap    map[string]string // lowerCase -> canonical clean pony name
 	customDirs     []string
 	customPonies   map[string]string // key: "subDir/cleanName", val: diskPath
 	customBalloons map[string]string // key: "cleanName+ext", val: diskPath
@@ -37,12 +38,14 @@ func NewAssetManager() *AssetManager {
 		aliasToQuote:   make(map[string]string),
 		quoteFiles:     make(map[string][]string),
 		ponyAliases:    make(map[string]map[string]bool),
+		casePonyMap:    make(map[string]string),
 		customDirs:     getSearchDirectories(),
 		customPonies:   make(map[string]string),
 		customBalloons: make(map[string]string),
 	}
 	am.initCustomIndex()
 	am.initQuotes()
+	am.initCasePonyMap()
 	return am
 }
 
@@ -123,16 +126,13 @@ func (am *AssetManager) initCustomIndex() {
 }
 
 func (am *AssetManager) initQuotes() {
-	am.mu.Lock()
-	defer am.mu.Unlock()
-
 	if am.initialized {
 		return
 	}
 	am.initialized = true
 
 	// 1. Read alias mapping from embedded assets
-	if poniesMapData, err := embeddedFS.ReadFile("assets/ponyquotes/ponies"); err == nil {
+	if poniesMapData, err := embeddedFS.ReadFile("ponyquotes/ponies"); err == nil {
 		am.parsePoniesAliasFile(string(poniesMapData))
 	}
 
@@ -145,7 +145,7 @@ func (am *AssetManager) initQuotes() {
 	}
 
 	// 3. Index embedded quote files
-	if entries, err := embeddedFS.ReadDir("assets/ponyquotes"); err == nil {
+	if entries, err := embeddedFS.ReadDir("ponyquotes"); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() || entry.Name() == "ponies" {
 				continue
@@ -153,7 +153,7 @@ func (am *AssetManager) initQuotes() {
 			name := entry.Name()
 			if dotIdx := strings.Index(name, "."); dotIdx > 0 {
 				basePony := name[:dotIdx]
-				relPath := path.Join("assets/ponyquotes", name)
+				relPath := path.Join("ponyquotes", name)
 				am.quoteFiles[basePony] = append(am.quoteFiles[basePony], "embed:"+relPath)
 				if _, exists := am.aliasToQuote[basePony]; !exists {
 					am.aliasToQuote[basePony] = basePony
@@ -181,10 +181,17 @@ func (am *AssetManager) initQuotes() {
 	}
 }
 
+func (am *AssetManager) initCasePonyMap() {
+	allPonies := am.listPoniesLocked(true, true)
+	for _, p := range allPonies {
+		am.casePonyMap[strings.ToLower(p)] = p
+	}
+}
+
 func (am *AssetManager) parsePoniesAliasFile(content string) {
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -206,8 +213,15 @@ func (am *AssetManager) parsePoniesAliasFile(content string) {
 // GetPonyFile finds and reads the content of a pony file by name.
 // First checks local user folders, then falls back to embedded binary assets.
 func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, string, error) {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
+	return am.getPonyFileLocked(name, allowsNonMLP)
+}
+
+func (am *AssetManager) getPonyFileLocked(name string, allowsNonMLP bool) (string, string, error) {
 	if name == "" {
-		return am.GetRandomPonyFile(allowsNonMLP)
+		return am.getRandomPonyFileLocked(allowsNonMLP)
 	}
 
 	cleanName := strings.TrimSuffix(name, ".pony")
@@ -234,19 +248,16 @@ func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, str
 
 	// 2. Fall back to embedded binary assets
 	for _, subDir := range dirs {
-		embedPath := path.Join("assets", subDir, cleanName+".pony")
+		embedPath := path.Join(subDir, cleanName+".pony")
 		data, err := embeddedFS.ReadFile(embedPath)
 		if err == nil {
 			return cleanName, string(data), nil
 		}
 	}
 
-	// 3. Try case-insensitive alias match
-	allPonies := am.ListPonies(allowsNonMLP, true)
-	for _, p := range allPonies {
-		if strings.EqualFold(p, cleanName) {
-			return am.GetPonyFile(p, allowsNonMLP)
-		}
+	// 3. Try case-insensitive lookup
+	if matchedName, ok := am.casePonyMap[strings.ToLower(cleanName)]; ok && matchedName != cleanName {
+		return am.getPonyFileLocked(matchedName, allowsNonMLP)
 	}
 
 	return "", "", fmt.Errorf("pony '%s' not found", name)
@@ -257,16 +268,27 @@ func (am *AssetManager) GetRandomPonyFile(allowsNonMLP bool) (string, string, er
 	am.mu.Lock()
 	defer am.mu.Unlock()
 
-	ponies := am.ListPonies(allowsNonMLP, false)
+	return am.getRandomPonyFileLocked(allowsNonMLP)
+}
+
+func (am *AssetManager) getRandomPonyFileLocked(allowsNonMLP bool) (string, string, error) {
+	ponies := am.listPoniesLocked(allowsNonMLP, false)
 	if len(ponies) == 0 {
 		return "", "", fmt.Errorf("no ponies available")
 	}
 	chosen := ponies[am.rnd.Intn(len(ponies))]
-	return am.GetPonyFile(chosen, allowsNonMLP)
+	return am.getPonyFileLocked(chosen, allowsNonMLP)
 }
 
 // ListPonies returns sorted list of available pony names (combining local FS & embedded).
 func (am *AssetManager) ListPonies(allowsNonMLP bool, includeExtra bool) []string {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
+	return am.listPoniesLocked(allowsNonMLP, includeExtra)
+}
+
+func (am *AssetManager) listPoniesLocked(allowsNonMLP bool, includeExtra bool) []string {
 	seen := make(map[string]bool)
 
 	dirs := []string{"ponies"}
@@ -289,8 +311,7 @@ func (am *AssetManager) ListPonies(allowsNonMLP bool, includeExtra bool) []strin
 
 	// Embedded FS directories
 	for _, subDir := range dirs {
-		embedDir := path.Join("assets", subDir)
-		entries, err := embeddedFS.ReadDir(embedDir)
+		entries, err := embeddedFS.ReadDir(subDir)
 		if err != nil {
 			continue
 		}
@@ -312,7 +333,10 @@ func (am *AssetManager) ListPonies(allowsNonMLP bool, includeExtra bool) []strin
 
 // ListPoniesWithAliases returns pony names formatted with alternative names (aliases).
 func (am *AssetManager) ListPoniesWithAliases(allowsNonMLP bool, includeExtra bool) []string {
-	basePonies := am.ListPonies(allowsNonMLP, includeExtra)
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
+	basePonies := am.listPoniesLocked(allowsNonMLP, includeExtra)
 	var result []string
 
 	for _, p := range basePonies {
@@ -334,6 +358,9 @@ func (am *AssetManager) ListPoniesWithAliases(allowsNonMLP bool, includeExtra bo
 
 // GetBalloonContent returns the contents of a balloon style file.
 func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, error) {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
 	ext := ".say"
 	if isThink {
 		ext = ".think"
@@ -353,13 +380,13 @@ func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, er
 	}
 
 	// 2. Check embedded assets
-	embedPath := path.Join("assets/balloons", fileName)
+	embedPath := path.Join("balloons", fileName)
 	data, err := embeddedFS.ReadFile(embedPath)
 	if err == nil {
 		return string(data), nil
 	}
 
-	data, err = embeddedFS.ReadFile(path.Join("assets/balloons", "cowsay"+ext))
+	data, err = embeddedFS.ReadFile(path.Join("balloons", "cowsay"+ext))
 	if err == nil {
 		return string(data), nil
 	}
@@ -369,6 +396,9 @@ func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, er
 
 // ListBalloons returns available balloon styles.
 func (am *AssetManager) ListBalloons(isThink bool) []string {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
 	ext := ".say"
 	if isThink {
 		ext = ".think"
@@ -383,7 +413,7 @@ func (am *AssetManager) ListBalloons(isThink bool) []string {
 	}
 
 	// Embedded balloons
-	entries, err := embeddedFS.ReadDir("assets/balloons")
+	entries, err := embeddedFS.ReadDir("balloons")
 	if err == nil {
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ext) {
@@ -402,8 +432,8 @@ func (am *AssetManager) ListBalloons(isThink bool) []string {
 
 // ListQuoters returns sorted list of all ponies that have quotes.
 func (am *AssetManager) ListQuoters() []string {
-	am.mu.Lock()
-	defer am.mu.Unlock()
+	am.mu.RLock()
+	defer am.mu.RUnlock()
 
 	var quoters []string
 	for ponyName, files := range am.quoteFiles {

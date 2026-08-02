@@ -33,3 +33,24 @@ func TestFormatBalloonTemplate(t *testing.T) {
 		t.Fatalf("Formatted balloon should have at least 3 lines, got %d", len(result))
 	}
 }
+
+func BenchmarkWrapText(b *testing.B) {
+	msg := "This is a long message that needs to be wrapped properly into multiple lines of text for ponysay rendering in the terminal."
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = WrapText(msg, 30)
+	}
+}
+
+func BenchmarkFormatBalloon(b *testing.B) {
+	bal := ParseBalloon("", false)
+	lines := []string{
+		"This is a long message that needs to be wrapped properly into multiple lines of text.",
+		"Another line of text in the balloon for testing throughput.",
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = bal.FormatBalloon(lines, 0, 0, "31")
+	}
+}
+
