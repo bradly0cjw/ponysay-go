@@ -106,5 +106,33 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 	if !strings.Contains(string(helpOut), "update") {
 		t.Errorf("-h help output missing update command description")
 	}
+
+	// 14. Test -F (any pony) flag
+	anyCmd := exec.Command("./ponysay_test_bin", "-F", "fluttershy", "AnyPony Test")
+	anyOut, anyErr := anyCmd.CombinedOutput()
+	if anyErr != nil || !strings.Contains(string(anyOut), "AnyPony Test") {
+		t.Errorf("-F flag failed: %v, output: %s", anyErr, string(anyOut))
+	}
+
+	// 15. Test Fuzzy Matching for misspelled pony
+	fuzzyCmd := exec.Command("./ponysay_test_bin", "-f", "fluter-shy", "Fuzzy Test")
+	fuzzyOut, fuzzyErr := fuzzyCmd.CombinedOutput()
+	if fuzzyErr != nil || !strings.Contains(string(fuzzyOut), "Fuzzy Test") {
+		t.Errorf("Fuzzy pony search failed: %v, output: %s", fuzzyErr, string(fuzzyOut))
+	}
+
+	// 16. Test Attached flag syntax (-ffluttershy)
+	attCmd := exec.Command("./ponysay_test_bin", "-ffluttershy", "Attached Test")
+	attOut, attErr := attCmd.CombinedOutput()
+	if attErr != nil || !strings.Contains(string(attOut), "Attached Test") {
+		t.Errorf("Attached flag -ffluttershy failed: %v, output: %s", attErr, string(attOut))
+	}
+
+	// 17. Test argument placement flexibility (message before flags)
+	posCmd := exec.Command("./ponysay_test_bin", "Positional Test", "-f", "fluttershy", "-b", "cowsay")
+	posOut, posErr := posCmd.CombinedOutput()
+	if posErr != nil || !strings.Contains(string(posOut), "Positional Test") {
+		t.Errorf("Positional argument before flags failed: %v, output: %s", posErr, string(posOut))
+	}
 }
 

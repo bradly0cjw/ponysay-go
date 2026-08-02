@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-//go:embed balloons extraponies extrattyponies ponies ponyquotes ttyponies
+//go:embed balloons extraponies extrattyponies ponies ponyquotes ttyponies share
 var embeddedFS embed.FS
 
 // AssetManager provides access to ponies, balloons, and quotes.
@@ -26,6 +26,8 @@ type AssetManager struct {
 	quoteFiles     map[string][]string
 	ponyAliases    map[string]map[string]bool
 	casePonyMap    map[string]string // lowerCase -> canonical clean pony name
+	ucsMap         map[string]string
+	ponyWidths     map[string]int
 	customDirs     []string
 	customPonies   map[string]string // key: "subDir/cleanName", val: diskPath
 	customBalloons map[string]string // key: "cleanName+ext", val: diskPath
@@ -39,6 +41,8 @@ func NewAssetManager() *AssetManager {
 		quoteFiles:     make(map[string][]string),
 		ponyAliases:    make(map[string]map[string]bool),
 		casePonyMap:    make(map[string]string),
+		ucsMap:         make(map[string]string),
+		ponyWidths:     make(map[string]int),
 		customDirs:     getSearchDirectories(),
 		customPonies:   make(map[string]string),
 		customBalloons: make(map[string]string),
@@ -46,6 +50,7 @@ func NewAssetManager() *AssetManager {
 	am.initCustomIndex()
 	am.initQuotes()
 	am.initCasePonyMap()
+	am.initUCSMap()
 	return am
 }
 
@@ -224,6 +229,7 @@ func (am *AssetManager) getPonyFileLocked(name string, allowsNonMLP bool) (strin
 		return am.getRandomPonyFileLocked(allowsNonMLP)
 	}
 
+	name = am.RemapUCS(name)
 	cleanName := strings.TrimSuffix(name, ".pony")
 
 	dirs := []string{"ponies", "ttyponies"}
@@ -260,7 +266,16 @@ func (am *AssetManager) getPonyFileLocked(name string, allowsNonMLP bool) (strin
 		return am.getPonyFileLocked(matchedName, allowsNonMLP)
 	}
 
-	return "", "", fmt.Errorf("pony '%s' not found", name)
+	// 4. Try fuzzy spell correction
+	availablePonies := am.listPoniesLocked(allowsNonMLP, false)
+	corrector := NewSpelloCorrecter()
+	bestMatches, _ := corrector.Correct(cleanName, availablePonies)
+	if len(bestMatches) > 0 {
+		chosen := bestMatches[am.rnd.Intn(len(bestMatches))]
+		return am.getPonyFileLocked(chosen, allowsNonMLP)
+	}
+
+	return "", "", fmt.Errorf("I have never heard of anypony named %s", name)
 }
 
 // GetRandomPonyFile picks a random pony.
@@ -272,11 +287,25 @@ func (am *AssetManager) GetRandomPonyFile(allowsNonMLP bool) (string, string, er
 }
 
 func (am *AssetManager) getRandomPonyFileLocked(allowsNonMLP bool) (string, string, error) {
+	// 1. Check for best.pony fallback
+	for _, subDir := range []string{"ponies", "extraponies"} {
+		if diskPath, ok := am.customPonies[subDir+"/best"]; ok {
+			if data, err := os.ReadFile(diskPath); err == nil {
+				return "best", string(data), nil
+			}
+		}
+		if data, err := embeddedFS.ReadFile(subDir + "/best.pony"); err == nil {
+			return "best", string(data), nil
+		}
+	}
+
 	ponies := am.listPoniesLocked(allowsNonMLP, false)
 	if len(ponies) == 0 {
 		return "", "", fmt.Errorf("no ponies available")
 	}
-	chosen := ponies[am.rnd.Intn(len(ponies))]
+
+	fittingPonies := am.FilterFittingPonies(ponies, allowsNonMLP)
+	chosen := fittingPonies[am.rnd.Intn(len(fittingPonies))]
 	return am.getPonyFileLocked(chosen, allowsNonMLP)
 }
 
@@ -391,7 +420,15 @@ func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, er
 		return string(data), nil
 	}
 
-	return "", fmt.Errorf("balloon style '%s' not found", name)
+	availableBalloons := am.ListBalloons(isThink)
+	corrector := NewSpelloCorrecter()
+	bestMatches, _ := corrector.Correct(cleanName, availableBalloons)
+	if len(bestMatches) > 0 {
+		chosen := bestMatches[am.rnd.Intn(len(bestMatches))]
+		return am.GetBalloonContent(chosen, isThink)
+	}
+
+	return "", fmt.Errorf("That balloon style %s does not exist", name)
 }
 
 // ListBalloons returns available balloon styles.

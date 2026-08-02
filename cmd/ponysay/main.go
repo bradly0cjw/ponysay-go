@@ -159,6 +159,7 @@ func main() {
 	// Pre-process custom arguments (+f, +l, +L, +A, ++info, +c, --f, --q, update, etc.)
 	args := os.Args[1:]
 	var processedArgs []string
+	var messageArgs []string
 	quoteModeRequested := false
 
 	for i := 0; i < len(args); i++ {
@@ -184,22 +185,24 @@ func main() {
 				balloonColor = args[i+1]
 				i++
 			}
-		} else if strings.HasPrefix(arg, "+f") || strings.HasPrefix(arg, "++file") || strings.HasPrefix(arg, "++pony") {
-			val := ""
-			if len(arg) > 2 && !strings.HasPrefix(arg, "++") {
-				val = arg[2:]
-			} else if strings.HasPrefix(arg, "++") && strings.Contains(arg, "=") {
-				val = arg[strings.Index(arg, "=")+1:]
-			} else if i+1 < len(args) {
-				val = args[i+1]
+		} else if arg == "-F" || arg == "+F" {
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
+				anyPonies = append(anyPonies, args[i+1])
 				i++
 			}
-			if val != "" {
-				nonMLPPonies = append(nonMLPPonies, val)
-			}
-		} else if arg == "--f" || arg == "--files" || arg == "--ponies" {
+		} else if arg == "--F" || arg == "++F" || arg == "--any-ponies" || arg == "++any-ponies" {
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
-				ponyFiles = append(ponyFiles, args[i+1])
+				anyPonies = append(anyPonies, args[i+1])
+				i++
+			}
+		} else if strings.HasPrefix(arg, "-F") || strings.HasPrefix(arg, "+F") {
+			val := arg[2:]
+			if val != "" {
+				anyPonies = append(anyPonies, val)
+			}
+		} else if arg == "+f" || arg == "++file" || arg == "++pony" {
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
+				nonMLPPonies = append(nonMLPPonies, args[i+1])
 				i++
 			}
 		} else if arg == "++f" || arg == "++files" || arg == "++ponies" {
@@ -207,28 +210,54 @@ func main() {
 				nonMLPPonies = append(nonMLPPonies, args[i+1])
 				i++
 			}
-		} else if arg == "--F" || arg == "--any-ponies" {
-			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
-				anyPonies = append(anyPonies, args[i+1])
+		} else if strings.HasPrefix(arg, "+f") {
+			val := arg[2:]
+			if val != "" {
+				nonMLPPonies = append(nonMLPPonies, val)
+			}
+		} else if arg == "-f" || arg == "-file" || arg == "--file" || arg == "-pony" || arg == "--pony" {
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
+				ponyFiles = append(ponyFiles, args[i+1])
 				i++
 			}
-		} else if arg == "--q" || arg == "--quotes" {
-			quoteModeRequested = true
+		} else if arg == "--f" || arg == "--files" || arg == "--ponies" {
 			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
-				quotePonies = append(quotePonies, args[i+1])
+				ponyFiles = append(ponyFiles, args[i+1])
 				i++
 			}
-		} else if arg == "-q" || arg == "--quote" {
+		} else if strings.HasPrefix(arg, "-f") {
+			val := arg[2:]
+			if val != "" {
+				ponyFiles = append(ponyFiles, val)
+			}
+		} else if arg == "-q" || arg == "+q" || arg == "-quote" || arg == "--quote" {
 			quoteModeRequested = true
 			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
 				quotePonies = append(quotePonies, args[i+1])
 				i++
 			}
-		} else if strings.HasPrefix(arg, "-q") {
+		} else if arg == "--q" || arg == "--quotes" || arg == "++q" || arg == "++quotes" {
 			quoteModeRequested = true
-			quotePonies = append(quotePonies, arg[2:])
-		} else {
+			for i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
+				quotePonies = append(quotePonies, args[i+1])
+				i++
+			}
+		} else if strings.HasPrefix(arg, "-q") || strings.HasPrefix(arg, "+q") {
+			quoteModeRequested = true
+			val := arg[2:]
+			if val != "" {
+				quotePonies = append(quotePonies, val)
+			}
+		} else if arg == "-b" || arg == "-bubble" || arg == "--bubble" || arg == "-balloon" || arg == "--balloon" || arg == "-W" || arg == "-wrap" || arg == "--wrap" {
 			processedArgs = append(processedArgs, arg)
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "+") {
+				processedArgs = append(processedArgs, args[i+1])
+				i++
+			}
+		} else if strings.HasPrefix(arg, "-") || strings.HasPrefix(arg, "+") {
+			processedArgs = append(processedArgs, arg)
+		} else {
+			messageArgs = append(messageArgs, arg)
 		}
 	}
 
@@ -332,7 +361,7 @@ func main() {
 	}
 
 	var message string
-	remainingArgs := flagSet.Args()
+	allMsgArgs := append(messageArgs, flagSet.Args()...)
 
 	// Quote mode processing
 	if quoteModeRequested || len(quotePonies) > 0 {
@@ -346,8 +375,8 @@ func main() {
 	}
 
 	if message == "" {
-		if len(remainingArgs) > 0 {
-			message = strings.Join(remainingArgs, " ")
+		if len(allMsgArgs) > 0 {
+			message = strings.Join(allMsgArgs, " ")
 		} else {
 			stat, _ := os.Stdin.Stat()
 			if (stat.Mode() & os.ModeCharDevice) == 0 {
