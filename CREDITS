@@ -1,0 +1,36 @@
+# Credits and Acknowledgments
+
+`ponysay-go` is a Go port of the original `ponysay` project (https://github.com/erkin/ponysay).
+
+## Original ponysay Active Developers
+- Erkin "erkin" Batu Altunbaş
+- Mattias "maandree" Andrée
+- Pablo "jristz" Lezaeta
+
+## Original ponysay Patchers and Contributors
+- Elis "etu" Axelsson
+- Duane "Marneus68" Bekaert
+- Vincent "Vincent-C" Cheng
+- Sven-Hendrik "svenstaro" Haase
+- Kyah "L-four" Rindlisbacher
+- James "rossy2401" Ross-Gowan
+- Jan Alexander "heftig" Steffens
+- Tomaž "avian2" Šolc
+- Louis "kragniz" Taylor
+- Daniel "gtmanfred" Wallace
+- Jannis "sycoso"
+- "spider-mario"
+- Ng Yik Phang
+- Christian Garbs
+- James Le Cuirot
+- Rob Nelson
+- Kenzie Togami
+- Joe Glancy
+- Tim D. Smith
+- Jiachen Yang
+- Michael "michi" Schwarz
+
+## Artwork & Asset Sources
+- **Browser Ponies**: Most pony artwork files were selected from [Browser Ponies](https://panzi.github.io/Browser-Ponies/) and converted using [util-say](https://github.com/maandree/util-say).
+- **Desktop Ponies**: Sourced from Desktop Ponies artwork collections.
+- **Custom Artwork**: Created specifically for `ponysay` by community contributors.

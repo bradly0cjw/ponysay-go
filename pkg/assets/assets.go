@@ -20,48 +20,106 @@ var embeddedFS embed.FS
 // Supports a hybrid model: user local directories take precedence,
 // with embedded binary assets as default fallbacks.
 type AssetManager struct {
-	rnd          *rand.Rand
-	mu           sync.Mutex
-	aliasToQuote map[string]string
-	quoteFiles   map[string][]string
-	ponyAliases  map[string]map[string]bool
-	customDirs   []string
-	initialized  bool
+	rnd            *rand.Rand
+	mu             sync.Mutex
+	aliasToQuote   map[string]string
+	quoteFiles     map[string][]string
+	ponyAliases    map[string]map[string]bool
+	customDirs     []string
+	customPonies   map[string]string // key: "subDir/cleanName", val: diskPath
+	customBalloons map[string]string // key: "cleanName+ext", val: diskPath
+	initialized    bool
 }
 
 func NewAssetManager() *AssetManager {
 	am := &AssetManager{
-		rnd:          rand.New(rand.NewSource(time.Now().UnixNano())),
-		aliasToQuote: make(map[string]string),
-		quoteFiles:   make(map[string][]string),
-		ponyAliases:  make(map[string]map[string]bool),
-		customDirs:   getSearchDirectories(),
+		rnd:            rand.New(rand.NewSource(time.Now().UnixNano())),
+		aliasToQuote:   make(map[string]string),
+		quoteFiles:     make(map[string][]string),
+		ponyAliases:    make(map[string]map[string]bool),
+		customDirs:     getSearchDirectories(),
+		customPonies:   make(map[string]string),
+		customBalloons: make(map[string]string),
 	}
+	am.initCustomIndex()
 	am.initQuotes()
 	return am
 }
 
 func getSearchDirectories() []string {
-	var dirs []string
-	// Current working directory
+	var candidateDirs []string
 	if cwd, err := os.Getwd(); err == nil {
-		dirs = append(dirs, cwd)
+		candidateDirs = append(candidateDirs, cwd)
 	}
 
-	// User config directory (~/.config/ponysay)
 	if userConfig, err := os.UserConfigDir(); err == nil {
-		dirs = append(dirs, filepath.Join(userConfig, "ponysay"))
+		candidateDirs = append(candidateDirs, filepath.Join(userConfig, "ponysay"))
 	}
 
-	// User home directory (~/.ponysay)
 	if home, err := os.UserHomeDir(); err == nil {
-		dirs = append(dirs, filepath.Join(home, ".ponysay"))
+		candidateDirs = append(candidateDirs, filepath.Join(home, ".ponysay"))
 	}
 
-	// System directories
-	dirs = append(dirs, "/usr/share/ponysay", "/usr/local/share/ponysay")
+	candidateDirs = append(candidateDirs, "/usr/share/ponysay", "/usr/local/share/ponysay")
 
-	return dirs
+	var validDirs []string
+	subdirs := []string{"ponies", "extraponies", "ttyponies", "extrattyponies", "balloons", "ponyquotes"}
+
+	for _, dir := range candidateDirs {
+		st, err := os.Stat(dir)
+		if err != nil || !st.IsDir() {
+			continue
+		}
+		hasAssets := false
+		for _, sub := range subdirs {
+			if subSt, subErr := os.Stat(filepath.Join(dir, sub)); subErr == nil && subSt.IsDir() {
+				hasAssets = true
+				break
+			}
+		}
+		if hasAssets {
+			validDirs = append(validDirs, dir)
+		}
+	}
+
+	return validDirs
+}
+
+func (am *AssetManager) initCustomIndex() {
+	if len(am.customDirs) == 0 {
+		return
+	}
+	ponySubdirs := []string{"ponies", "extraponies", "ttyponies", "extrattyponies"}
+	for _, baseDir := range am.customDirs {
+		for _, subDir := range ponySubdirs {
+			diskDir := filepath.Join(baseDir, subDir)
+			entries, err := os.ReadDir(diskDir)
+			if err != nil {
+				continue
+			}
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pony") {
+					cleanName := strings.TrimSuffix(entry.Name(), ".pony")
+					key := subDir + "/" + cleanName
+					if _, exists := am.customPonies[key]; !exists {
+						am.customPonies[key] = filepath.Join(diskDir, entry.Name())
+					}
+				}
+			}
+		}
+
+		bDir := filepath.Join(baseDir, "balloons")
+		bEntries, err := os.ReadDir(bDir)
+		if err == nil {
+			for _, entry := range bEntries {
+				if !entry.IsDir() {
+					if _, exists := am.customBalloons[entry.Name()]; !exists {
+						am.customBalloons[entry.Name()] = filepath.Join(bDir, entry.Name())
+					}
+				}
+			}
+		}
+	}
 }
 
 func (am *AssetManager) initQuotes() {
@@ -161,13 +219,15 @@ func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, str
 		dirs = append(dirs, "extraponies", "extrattyponies")
 	}
 
-	// 1. Check local custom directories on disk
-	for _, baseDir := range am.customDirs {
+	// 1. Check custom ponies index (if any custom directories exist)
+	if len(am.customPonies) > 0 {
 		for _, subDir := range dirs {
-			diskPath := filepath.Join(baseDir, subDir, cleanName+".pony")
-			data, err := os.ReadFile(diskPath)
-			if err == nil {
-				return cleanName, string(data), nil
+			key := subDir + "/" + cleanName
+			if diskPath, ok := am.customPonies[key]; ok {
+				data, err := os.ReadFile(diskPath)
+				if err == nil {
+					return cleanName, string(data), nil
+				}
 			}
 		}
 	}
@@ -214,18 +274,14 @@ func (am *AssetManager) ListPonies(allowsNonMLP bool, includeExtra bool) []strin
 		dirs = append(dirs, "extraponies")
 	}
 
-	// Local FS directories
-	for _, baseDir := range am.customDirs {
-		for _, subDir := range dirs {
-			diskDir := filepath.Join(baseDir, subDir)
-			entries, err := os.ReadDir(diskDir)
-			if err != nil {
-				continue
-			}
-			for _, entry := range entries {
-				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pony") {
-					name := strings.TrimSuffix(entry.Name(), ".pony")
-					seen[name] = true
+	// Custom FS entries (from in-memory customPonies index)
+	for key := range am.customPonies {
+		parts := strings.SplitN(key, "/", 2)
+		if len(parts) == 2 {
+			subDir, cleanName := parts[0], parts[1]
+			for _, d := range dirs {
+				if d == subDir {
+					seen[cleanName] = true
 				}
 			}
 		}
@@ -287,17 +343,17 @@ func (am *AssetManager) GetBalloonContent(name string, isThink bool) (string, er
 		name = "cowsay"
 	}
 	cleanName := strings.TrimSuffix(name, ext)
+	fileName := cleanName + ext
 
-	// 1. Check local FS
-	for _, baseDir := range am.customDirs {
-		diskPath := filepath.Join(baseDir, "balloons", cleanName+ext)
+	// 1. Check custom balloons index
+	if diskPath, ok := am.customBalloons[fileName]; ok {
 		if data, err := os.ReadFile(diskPath); err == nil {
 			return string(data), nil
 		}
 	}
 
 	// 2. Check embedded assets
-	embedPath := path.Join("assets/balloons", cleanName+ext)
+	embedPath := path.Join("assets/balloons", fileName)
 	data, err := embeddedFS.ReadFile(embedPath)
 	if err == nil {
 		return string(data), nil
@@ -319,19 +375,14 @@ func (am *AssetManager) ListBalloons(isThink bool) []string {
 	}
 	seen := make(map[string]bool)
 
-	for _, baseDir := range am.customDirs {
-		diskDir := filepath.Join(baseDir, "balloons")
-		entries, err := os.ReadDir(diskDir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if !e.IsDir() && strings.HasSuffix(e.Name(), ext) {
-				seen[strings.TrimSuffix(e.Name(), ext)] = true
-			}
+	// Custom balloons
+	for fileName := range am.customBalloons {
+		if strings.HasSuffix(fileName, ext) {
+			seen[strings.TrimSuffix(fileName, ext)] = true
 		}
 	}
 
+	// Embedded balloons
 	entries, err := embeddedFS.ReadDir("assets/balloons")
 	if err == nil {
 		for _, e := range entries {

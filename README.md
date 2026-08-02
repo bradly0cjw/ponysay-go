@@ -2,6 +2,7 @@
 
 Cross-platform Go port of [ponysay](https://github.com/erkin/ponysay) (cowsay reimplementation for ponies).
 
+> [!IMPORTANT]
 > **Disclaimer**: This is a personal project created strictly for fun. The maintainer is not responsible for maintaining, updating, or providing ongoing support for this repository.
 
 ---
@@ -299,6 +300,25 @@ go test -v ./...
 
 ---
 
+## Credits & Asset Attributions
+
+`ponysay-go` is a Go reimplementation of the original Python **[ponysay](https://github.com/erkin/ponysay)** project created by [Erkin Batu Altunbaş](https://github.com/erkin), [Mattias Andrée](https://github.com/maandree), [Pablo Lezaeta](https://github.com/jristz), and community contributors.
+
+### Original Project
+- **Original Repository**: [erkin/ponysay](https://github.com/erkin/ponysay)
+
+
+### Artwork & Asset Sources
+The pony artwork, quote databases, and balloon assets embedded and used in `ponysay-go` are sourced from the original `ponysay` distribution:
+- **Browser Ponies**: The majority of pony art files were selected from [Browser Ponies](https://panzi.github.io/Browser-Ponies/) and converted using [util-say](https://github.com/maandree/util-say).
+- **Desktop Ponies**: Sourced from Desktop Ponies artwork collections.
+- **Custom Artwork**: Created specifically for `ponysay` by community contributors.
+
+For a complete list of patchers and contributors, please see the [CREDITS](CREDITS) file.
+
+---
+
 ## Disclaimer
 
 This is a personal project created strictly for fun. The maintainer is not responsible for maintaining, updating, or fixing issues with this repository.
+
