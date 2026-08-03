@@ -491,7 +491,7 @@ func main() {
 			infoLines := strings.Split(infoTextEscaped, "\n")
 			p.BodyLines = append([]string{"$balloon$"}, infoLines...)
 		} else {
-			p.BodyLines = []string{"$balloon$", "There is not metadata for this pony file"}
+			p.BodyLines = []string{"$balloon$", "There is no metadata for this pony file"}
 		}
 	}
 
