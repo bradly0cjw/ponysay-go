@@ -67,4 +67,3 @@ $balloon5$
 		_ = p.RenderPonyWithBalloon(balloonLines, "╲", "")
 	}
 }
-

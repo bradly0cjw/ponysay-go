@@ -60,9 +60,11 @@ func main() {
 	var listNonMLPAliases bool
 	var listAll bool
 	var listAllAliases bool
+	var oneListMLP bool
+	var oneListNonMLP bool
+	var oneListAll bool
 	var listBalloons bool
 	var listQuoters bool
-	var oneList bool
 
 	var compress bool
 	var ponyOnly bool
@@ -113,7 +115,7 @@ func main() {
 	flagSet.BoolVar(&listBalloons, "balloonlist", false, "List balloon styles")
 
 	flagSet.BoolVar(&listQuoters, "quoters", false, "List ponies with quotes")
-	flagSet.BoolVar(&oneList, "onelist", false, "List output in one line")
+	flagSet.BoolVar(&oneListMLP, "onelist", false, "List output in one line")
 
 	flagSet.BoolVar(&compress, "c", false, "Compress messages")
 	flagSet.BoolVar(&compress, "compress", false, "Compress messages")
@@ -166,14 +168,28 @@ func main() {
 		arg := args[i]
 		if arg == "update" || arg == "-u" || arg == "--update" {
 			doUpdate = true
+		} else if arg == "-l" || arg == "--list" {
+			listMLP = true
 		} else if arg == "+l" || arg == "++list" {
 			listNonMLP = true
+		} else if arg == "-L" || arg == "--symlist" || arg == "--altlist" {
+			listMLPAliases = true
 		} else if arg == "+L" || arg == "++symlist" || arg == "++altlist" {
 			listNonMLPAliases = true
-		} else if arg == "+A" || arg == "++all" || arg == "++symall" || arg == "++altall" {
+		} else if arg == "-A" || arg == "--all" {
+			listAll = true
+		} else if arg == "+A" || arg == "++all" || arg == "++symall" || arg == "++altall" || arg == "--symall" || arg == "--altall" {
 			listAllAliases = true
-		} else if arg == "++onelist" || arg == "--Onelist" {
-			oneList = true
+		} else if arg == "--onelist" {
+			oneListMLP = true
+		} else if arg == "++onelist" {
+			oneListNonMLP = true
+		} else if arg == "--Onelist" {
+			oneListAll = true
+		} else if arg == "-B" || arg == "--bubblelist" || arg == "--balloonlist" {
+			listBalloons = true
+		} else if arg == "--quoters" {
+			listQuoters = true
 		} else if arg == "-i" || arg == "--info" {
 			infoLevel = 1
 		} else if arg == "+i" || arg == "++info" {
@@ -296,43 +312,76 @@ func main() {
 
 	am := assets.NewAssetManager()
 
-	outputList := func(items []string) {
-		if oneList {
-			fmt.Println(strings.Join(items, " "))
-		} else {
-			for _, item := range items {
-				fmt.Println(item)
-			}
+	outputGroupedList := func(includeStandard, includeExtra, withAliases bool) {
+		width := term.GetTerminalWidth()
+		groups := am.GetPonyGroups(includeStandard, includeExtra, withAliases, true)
+		for _, g := range groups {
+			fmt.Println()
+			fmt.Printf("\x1b[1mponies located in %s\x1b[0m\n", g.DirectoryPath)
+			fmt.Print(assets.FormatColumnisedList(g.Ponies, width))
 		}
 	}
 
-	if listMLP {
-		outputList(am.ListPonies(false, false))
+	outputList := func(items []string) {
+		width := term.GetTerminalWidth()
+		fmt.Print(assets.FormatColumnisedList(items, width))
+	}
+
+	if listQuoters {
+		for _, item := range am.ListQuoters(true, false) {
+			fmt.Println(item)
+		}
+		os.Exit(0)
+	}
+
+	if oneListAll || (oneListMLP && oneListNonMLP) {
+		for _, item := range am.ListPoniesOneList(true, true) {
+			fmt.Println(item)
+		}
+		os.Exit(0)
+	}
+
+	if oneListMLP {
+		for _, item := range am.ListPoniesOneList(true, false) {
+			fmt.Println(item)
+		}
+		os.Exit(0)
+	}
+
+	if oneListNonMLP {
+		for _, item := range am.ListPoniesOneList(false, true) {
+			fmt.Println(item)
+		}
+		os.Exit(0)
+	}
+
+	if listAllAliases || (listMLPAliases && listNonMLPAliases) {
+		outputGroupedList(true, true, true)
+		os.Exit(0)
+	}
+
+	if listAll || (listMLP && listNonMLP) {
+		outputGroupedList(true, true, false)
 		os.Exit(0)
 	}
 
 	if listMLPAliases {
-		outputList(am.ListPoniesWithAliases(false, false))
+		outputGroupedList(true, false, true)
 		os.Exit(0)
 	}
 
-	if listNonMLP {
-		outputList(am.ListPonies(true, true))
+	if listMLP {
+		outputGroupedList(true, false, false)
 		os.Exit(0)
 	}
 
 	if listNonMLPAliases {
-		outputList(am.ListPoniesWithAliases(true, true))
+		outputGroupedList(false, true, true)
 		os.Exit(0)
 	}
 
-	if listAll {
-		outputList(am.ListPonies(true, true))
-		os.Exit(0)
-	}
-
-	if listAllAliases {
-		outputList(am.ListPoniesWithAliases(true, true))
+	if listNonMLP {
+		outputGroupedList(false, true, false)
 		os.Exit(0)
 	}
 
@@ -341,23 +390,23 @@ func main() {
 		os.Exit(0)
 	}
 
-	if listQuoters {
-		outputList(am.ListQuoters())
-		os.Exit(0)
-	}
-
 	// Determine pony selection and quote handling
 	selectedPony := ""
-	allowsNonMLP := false
+	includeStandard := true
+	includeExtra := false
 
 	if len(nonMLPPonies) > 0 {
 		selectedPony = nonMLPPonies[rnd.Intn(len(nonMLPPonies))]
-		allowsNonMLP = true
+		includeStandard = false
+		includeExtra = true
 	} else if len(anyPonies) > 0 {
 		selectedPony = anyPonies[rnd.Intn(len(anyPonies))]
-		allowsNonMLP = true
+		includeStandard = true
+		includeExtra = true
 	} else if len(ponyFiles) > 0 {
 		selectedPony = ponyFiles[rnd.Intn(len(ponyFiles))]
+		includeStandard = true
+		includeExtra = false
 	}
 
 	var message string
@@ -373,6 +422,8 @@ func main() {
 		if err == nil {
 			message = qText
 			selectedPony = pName
+			includeStandard = true
+			includeExtra = true
 		}
 	}
 
@@ -410,7 +461,7 @@ func main() {
 	}
 
 	// Load Pony file
-	realPonyName, ponyContent, err := am.GetPonyFile(selectedPony, allowsNonMLP)
+	realPonyName, ponyContent, err := am.GetPonyFile(selectedPony, includeStandard, includeExtra)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -506,4 +557,3 @@ func printHelp(isThink bool) {
 	fmt.Println("  -v, --version      Print version information.")
 	fmt.Println("  -h, --help         Print this help message.")
 }
-

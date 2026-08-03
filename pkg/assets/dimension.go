@@ -43,7 +43,7 @@ func GetPonyWidth(content string) int {
 }
 
 // FilterFittingPonies filters ponies whose width fits within terminal width constraint.
-func (am *AssetManager) FilterFittingPonies(ponies []string, allowsNonMLP bool) []string {
+func (am *AssetManager) FilterFittingPonies(ponies []string, includeStandard bool, includeExtra bool) []string {
 	termWidth := term.GetTerminalWidth()
 	if termWidth <= 0 {
 		return ponies
@@ -53,7 +53,7 @@ func (am *AssetManager) FilterFittingPonies(ponies []string, allowsNonMLP bool) 
 	for _, p := range ponies {
 		w, ok := am.ponyWidths[p]
 		if !ok {
-			_, content, err := am.getPonyFileLocked(p, allowsNonMLP)
+			_, content, err := am.getPonyFileLocked(p, includeStandard, includeExtra)
 			if err == nil {
 				w = GetPonyWidth(content)
 				am.ponyWidths[p] = w

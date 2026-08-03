@@ -8,13 +8,13 @@ func TestAssetManagerPonies(t *testing.T) {
 	am := NewAssetManager()
 
 	// Test listing ponies
-	ponies := am.ListPonies(false, false)
+	ponies := am.ListPonies(true, false)
 	if len(ponies) == 0 {
 		t.Fatalf("Expected non-empty list of MLP ponies")
 	}
 
 	// Test getting derpy pony
-	name, content, err := am.GetPonyFile("derpy", false)
+	name, content, err := am.GetPonyFile("derpy", true, false)
 	if err != nil {
 		t.Fatalf("Failed to get derpy pony: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestAssetManagerPonies(t *testing.T) {
 	}
 
 	// Test getting random pony
-	rName, rContent, err := am.GetRandomPonyFile(false)
+	rName, rContent, err := am.GetRandomPonyFile(true, false)
 	if err != nil {
 		t.Fatalf("Failed to get random pony: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestAssetManagerBalloons(t *testing.T) {
 func TestAssetManagerQuotes(t *testing.T) {
 	am := NewAssetManager()
 
-	quoters := am.ListQuoters()
+	quoters := am.ListQuoters(true, false)
 	if len(quoters) == 0 {
 		t.Fatalf("Expected non-empty list of quoters")
 	}
@@ -110,8 +110,8 @@ func TestAssetManagerConcurrency(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			for j := 0; j < 50; j++ {
-				_, _, _ = am.GetPonyFile("derpy", false)
-				_, _, _ = am.GetRandomPonyFile(false)
+				_, _, _ = am.GetPonyFile("derpy", true, false)
+				_, _, _ = am.GetRandomPonyFile(true, false)
 				_ = am.ListPonies(true, true)
 				_, _ = am.GetBalloonContent("cowsay", false)
 				_ = am.ListBalloons(false)
@@ -125,5 +125,3 @@ func TestAssetManagerConcurrency(t *testing.T) {
 		<-done
 	}
 }
-
-

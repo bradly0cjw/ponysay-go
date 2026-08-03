@@ -143,4 +143,3 @@ func (p *Pony) RenderPonyOnly() string {
 
 	return strings.Join(output, "\n")
 }
-

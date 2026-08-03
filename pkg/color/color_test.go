@@ -43,4 +43,3 @@ func BenchmarkDisplayWidth(b *testing.B) {
 		_ = DisplayWidth(plain)
 	}
 }
-
