@@ -6,24 +6,30 @@
 
 ## Table of Contents
 
-1. [Synopsis](#synopsis)
-2. [Execution Modes (`ponysay` vs `ponythink`)](#execution-modes-ponysay-vs-ponythink)
-3. [Command Line Options Reference](#command-line-options-reference)
-   - [Pony Selection Options](#pony-selection-options)
-   - [Quote Database Options](#quote-database-options)
-   - [Balloon & Formatting Options](#balloon--formatting-options)
-   - [Color Engine Options](#color-engine-options)
-   - [Listing & Discovery Options](#listing--discovery-options)
-   - [Information & Artwork Display](#information--artwork-display)
-   - [Maintenance & System Commands](#maintenance--system-commands)
-4. [Input Handling & Message Fallbacks](#input-handling--message-fallbacks)
-5. [Smart Search & Fuzzy Spell Correction (`SpelloCorrecter`)](#smart-search--fuzzy-spell-correction-spellocorrecter)
-6. [Unicode Accent Remapping (`PONYSAY_UCS_ME`)](#unicode-accent-remapping-ponysay_ucs_me)
-7. [Asset Resolution Engine & Directory Hierarchy](#asset-resolution-engine--directory-hierarchy)
-8. [Terminal Width Auto-Fitting](#terminal-width-auto-fitting)
-9. [Environment Variables](#environment-variables)
-10. [Usage Examples](#usage-examples)
-11. [Troubleshooting & FAQ](#troubleshooting--faq)
+- [ponysay-go Manual](#ponysay-go-manual)
+  - [Table of Contents](#table-of-contents)
+  - [Synopsis](#synopsis)
+  - [Execution Modes (`ponysay` vs `ponythink`)](#execution-modes-ponysay-vs-ponythink)
+  - [Command Line Options Reference](#command-line-options-reference)
+    - [Pony Selection Options](#pony-selection-options)
+    - [Quote Database Options](#quote-database-options)
+    - [Balloon \& Formatting Options](#balloon--formatting-options)
+    - [Color Engine Options](#color-engine-options)
+    - [Listing \& Discovery Options](#listing--discovery-options)
+    - [Information \& Artwork Display](#information--artwork-display)
+    - [Maintenance \& System Commands](#maintenance--system-commands)
+  - [Input Handling \& Message Fallbacks](#input-handling--message-fallbacks)
+  - [Smart Search \& Fuzzy Spell Correction (`SpelloCorrecter`)](#smart-search--fuzzy-spell-correction-spellocorrecter)
+  - [Unicode Accent Remapping (`PONYSAY_UCS_ME`)](#unicode-accent-remapping-ponysay_ucs_me)
+  - [Asset Resolution Engine \& Directory Hierarchy](#asset-resolution-engine--directory-hierarchy)
+  - [Terminal Width Auto-Fitting](#terminal-width-auto-fitting)
+  - [Environment Variables](#environment-variables)
+  - [Usage Examples](#usage-examples)
+    - [Interactive Speech \& Thought](#interactive-speech--thought)
+    - [Random Quotes \& Quoter List](#random-quotes--quoter-list)
+    - [Shell Startup Integration](#shell-startup-integration)
+    - [Custom Ponies](#custom-ponies)
+  - [Troubleshooting \& FAQ](#troubleshooting--faq)
 
 ---
 
@@ -206,16 +212,30 @@ ponysay -q
 # Specific quote from Pinkie Pie
 ponysay -q pinkie
 
+# Specific quote from multiple ponies
+ponysay --quotes twilight spike
+
 # List all ponies that have quotes
-ponysay --quoters
+ponysay --quoters # or ponysay --q
 ```
 
-### Shell Startup Integration (`.bashrc` / `.zshrc`)
+### Shell Startup Integration
+
+Unix shell (macOS / Linux) startup example (`~/.bashrc` or `~/.zshrc`):
 ```bash
 # Add to end of shell configuration file
 if command -v ponysay >/dev/null 2>&1; then
     fortune | ponysay
+    # or you just want a random quote on shell startup
+    ponysay -q
 fi
+```
+Windows PowerShell equivalent:
+```powershell
+# Add to end of PowerShell profile
+if (Get-Command ponysay -ErrorAction SilentlyContinue) {
+    ponysay -q
+}
 ```
 
 ### Custom Ponies

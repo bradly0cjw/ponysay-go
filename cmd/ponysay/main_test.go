@@ -4,6 +4,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"ponysay-go/pkg/color"
 )
 
 func TestCLIFullFeatureSuite(t *testing.T) {
@@ -31,11 +33,25 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 		t.Errorf("Pony selection -f failed")
 	}
 
+	// -f should fail for extra ponies
+	fFailCmd := exec.Command("./ponysay_test_bin", "-f", "archlinux", "Fail!")
+	fFailOut, _ := fFailCmd.CombinedOutput()
+	if !strings.Contains(string(fFailOut), "never heard of") {
+		t.Errorf("-f flag should fail when selecting extra pony archlinux")
+	}
+
 	// 4. Test Non-MLP Pony (+f)
-	plusFCmd := exec.Command("./ponysay_test_bin", "+f", "cow", "Moo!")
-	plusFOut, _ := plusFCmd.CombinedOutput()
-	if len(plusFOut) == 0 {
+	plusFCmd := exec.Command("./ponysay_test_bin", "+f", "archlinux", "Arch!")
+	plusFOut, plusFErr := plusFCmd.CombinedOutput()
+	if plusFErr != nil || len(plusFOut) == 0 {
 		t.Errorf("Non-MLP pony +f failed")
+	}
+
+	// +f should fail for standard ponies
+	plusFFailCmd := exec.Command("./ponysay_test_bin", "+f", "derpy", "Fail!")
+	plusFFailOut, _ := plusFFailCmd.CombinedOutput()
+	if !strings.Contains(string(plusFFailOut), "never heard of") {
+		t.Errorf("+f flag should fail when selecting standard pony derpy")
 	}
 
 	// 5. Test Quote mode (-q pinkie)
@@ -55,8 +71,20 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 	// 7. Test Pony listing (-l, -L, +l, +L, -A, +A)
 	lCmd := exec.Command("./ponysay_test_bin", "-l")
 	lOut, _ := lCmd.CombinedOutput()
-	if !strings.Contains(string(lOut), "derpy") {
-		t.Errorf("-l listing failed")
+	if !strings.Contains(string(lOut), "derpy") || strings.Contains(string(lOut), "archlinux") {
+		t.Errorf("-l listing should contain standard ponies (derpy) and exclude extra ponies (archlinux)")
+	}
+
+	plusLCmd := exec.Command("./ponysay_test_bin", "+l")
+	plusLOut, _ := plusLCmd.CombinedOutput()
+	if !strings.Contains(string(plusLOut), "archlinux") || strings.Contains(string(plusLOut), "derpy") {
+		t.Errorf("+l listing should contain extra ponies (archlinux) and exclude standard ponies (derpy)")
+	}
+
+	aCmd := exec.Command("./ponysay_test_bin", "-A")
+	aOut, _ := aCmd.CombinedOutput()
+	if !strings.Contains(string(aOut), "derpy") || !strings.Contains(string(aOut), "archlinux") {
+		t.Errorf("-A listing should contain both standard (derpy) and extra (archlinux) ponies")
 	}
 
 	lAliasesCmd := exec.Command("./ponysay_test_bin", "-L")
@@ -65,11 +93,14 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 		t.Errorf("-L listing with aliases failed")
 	}
 
-	// 8. Test One-line listing (--onelist)
+	// 8. Test One-column listing (--onelist)
 	oneListCmd := exec.Command("./ponysay_test_bin", "-l", "--onelist")
 	oneListOut, _ := oneListCmd.CombinedOutput()
-	if strings.Count(string(oneListOut), "\n") > 2 {
-		t.Errorf("--onelist should output list in a single line")
+	if strings.Count(string(oneListOut), "\n") < 50 {
+		t.Errorf("--onelist should output list with one item per line")
+	}
+	if strings.Count(string(oneListOut), "\n") <= strings.Count(string(lOut), "\n") {
+		t.Errorf("--onelist should have more lines (one per item) than matrix listing -l")
 	}
 
 	// 9. Test Balloon listing (-B)
@@ -82,8 +113,14 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 	// 10. Test Metadata Info (-i and +i)
 	infoCmd := exec.Command("./ponysay_test_bin", "-f", "derpy", "-i")
 	infoOut, _ := infoCmd.CombinedOutput()
-	if !strings.Contains(string(infoOut), "NAME:") {
-		t.Errorf("-i metadata info failed")
+	if !strings.Contains(color.StripANSI(string(infoOut)), "NAME: Derpy") {
+		t.Errorf("-i metadata info failed, output: %s", string(infoOut))
+	}
+
+	plusInfoCmd := exec.Command("./ponysay_test_bin", "-f", "derpy", "+i")
+	plusInfoOut, _ := plusInfoCmd.CombinedOutput()
+	if !strings.Contains(color.StripANSI(string(plusInfoOut)), "NAME: Derpy") {
+		t.Errorf("+i metadata info failed, output: %s", string(plusInfoOut))
 	}
 
 	// 11. Test Pony Only (-o)
@@ -142,4 +179,3 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 		t.Errorf("Fuzzy quote selection failed: %v, output: %s", fqErr, string(fqOut))
 	}
 }
-

@@ -245,4 +245,3 @@ func (pr *progressReader) render() {
 		fmt.Printf("\r\x1b[KDownloading %.2f MB (%.2f MB/s)...", readMB, speed)
 	}
 }
-

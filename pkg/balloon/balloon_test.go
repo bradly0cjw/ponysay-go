@@ -53,4 +53,3 @@ func BenchmarkFormatBalloon(b *testing.B) {
 		_ = bal.FormatBalloon(lines, 0, 0, "31")
 	}
 }
-

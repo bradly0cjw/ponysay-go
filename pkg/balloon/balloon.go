@@ -270,4 +270,3 @@ func (b *Balloon) FormatBalloon(inputLines []string, minWidth, minHeight int, ba
 
 	return result
 }
-

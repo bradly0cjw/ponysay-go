@@ -88,4 +88,3 @@ func TestProgressReader(t *testing.T) {
 		t.Errorf("read %d bytes; want %d", totalRead, len(data))
 	}
 }
-

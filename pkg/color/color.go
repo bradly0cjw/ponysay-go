@@ -43,7 +43,6 @@ func DisplayWidth(s string) int {
 	return width
 }
 
-
 // ApplyColor wraps text in ANSI color sequence if specified.
 func ApplyColor(text string, colorCode string) string {
 	if colorCode == "" {

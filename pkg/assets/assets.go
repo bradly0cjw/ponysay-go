@@ -27,6 +27,7 @@ type AssetManager struct {
 	ponyAliases    map[string]map[string]bool
 	casePonyMap    map[string]string // lowerCase -> canonical clean pony name
 	ucsMap         map[string]string
+	reverseUCSMap  map[string]string
 	ponyWidths     map[string]int
 	customDirs     []string
 	customPonies   map[string]string // key: "subDir/cleanName", val: diskPath
@@ -42,6 +43,7 @@ func NewAssetManager() *AssetManager {
 		ponyAliases:    make(map[string]map[string]bool),
 		casePonyMap:    make(map[string]string),
 		ucsMap:         make(map[string]string),
+		reverseUCSMap:  make(map[string]string),
 		ponyWidths:     make(map[string]int),
 		customDirs:     getSearchDirectories(),
 		customPonies:   make(map[string]string),
@@ -131,21 +133,52 @@ func (am *AssetManager) initCustomIndex() {
 }
 
 func (am *AssetManager) initQuotes() {
-	if am.initialized {
-		return
+	// 0. Parse ponyquotes/ponies alias mappings
+	if data, err := embeddedFS.ReadFile("ponyquotes/ponies"); err == nil {
+		am.parsePoniesAliasFile(string(data))
 	}
-	am.initialized = true
-
-	// 1. Read alias mapping from embedded assets
-	if poniesMapData, err := embeddedFS.ReadFile("ponyquotes/ponies"); err == nil {
-		am.parsePoniesAliasFile(string(poniesMapData))
-	}
-
-	// 2. Read custom ponies mapping if present on local FS
 	for _, baseDir := range am.customDirs {
-		pPath := filepath.Join(baseDir, "ponyquotes", "ponies")
-		if data, err := os.ReadFile(pPath); err == nil {
+		aliasPath := filepath.Join(baseDir, "ponyquotes", "ponies")
+		if data, err := os.ReadFile(aliasPath); err == nil {
 			am.parsePoniesAliasFile(string(data))
+		}
+	}
+
+	// 1. Index quote files in ponies/ (legacy/embedded if any)
+	if entries, err := embeddedFS.ReadDir("ponies"); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".quote") {
+				name := entry.Name()
+				basePony := strings.TrimSuffix(name, ".quote")
+				relPath := path.Join("ponies", name)
+				for _, p := range strings.Split(basePony, "+") {
+					if p != "" {
+						am.quoteFiles[p] = append(am.quoteFiles[p], "embed:"+relPath)
+						if _, exists := am.aliasToQuote[p]; !exists {
+							am.aliasToQuote[p] = p
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Index quote files in custom ponies dirs
+	for _, baseDir := range am.customDirs {
+		pDir := filepath.Join(baseDir, "ponies")
+		if entries, err := os.ReadDir(pDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".quote") {
+					name := entry.Name()
+					basePony := strings.TrimSuffix(name, ".quote")
+					absPath := filepath.Join(pDir, name)
+					for _, p := range strings.Split(basePony, "+") {
+						if p != "" {
+							am.quoteFiles[p] = append(am.quoteFiles[p], "file:"+absPath)
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -159,9 +192,13 @@ func (am *AssetManager) initQuotes() {
 			if dotIdx := strings.Index(name, "."); dotIdx > 0 {
 				basePony := name[:dotIdx]
 				relPath := path.Join("ponyquotes", name)
-				am.quoteFiles[basePony] = append(am.quoteFiles[basePony], "embed:"+relPath)
-				if _, exists := am.aliasToQuote[basePony]; !exists {
-					am.aliasToQuote[basePony] = basePony
+				for _, p := range strings.Split(basePony, "+") {
+					if p != "" {
+						am.quoteFiles[p] = append(am.quoteFiles[p], "embed:"+relPath)
+						if _, exists := am.aliasToQuote[p]; !exists {
+							am.aliasToQuote[p] = p
+						}
+					}
 				}
 			}
 		}
@@ -179,11 +216,70 @@ func (am *AssetManager) initQuotes() {
 				if dotIdx := strings.Index(name, "."); dotIdx > 0 {
 					basePony := name[:dotIdx]
 					absPath := filepath.Join(qDir, name)
-					am.quoteFiles[basePony] = append(am.quoteFiles[basePony], "file:"+absPath)
+					for _, p := range strings.Split(basePony, "+") {
+						if p != "" {
+							am.quoteFiles[p] = append(am.quoteFiles[p], "file:"+absPath)
+						}
+					}
 				}
 			}
 		}
 	}
+
+	// 5. Index MASTER metadata tags from .pony files to set quote relationships
+	ponySubdirs := []string{"ponies", "extraponies", "ttyponies", "extrattyponies"}
+	for _, subDir := range ponySubdirs {
+		if entries, err := embeddedFS.ReadDir(subDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pony") {
+					cleanName := strings.ToLower(strings.TrimSuffix(entry.Name(), ".pony"))
+					relPath := path.Join(subDir, entry.Name())
+					if data, err := embeddedFS.ReadFile(relPath); err == nil {
+						if master := parseMasterTag(string(data)); master != "" {
+							am.aliasToQuote[cleanName] = master
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for _, baseDir := range am.customDirs {
+		for _, subDir := range ponySubdirs {
+			diskDir := filepath.Join(baseDir, subDir)
+			if entries, err := os.ReadDir(diskDir); err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pony") {
+						cleanName := strings.ToLower(strings.TrimSuffix(entry.Name(), ".pony"))
+						absPath := filepath.Join(diskDir, entry.Name())
+						if data, err := os.ReadFile(absPath); err == nil {
+							if master := parseMasterTag(string(data)); master != "" {
+								am.aliasToQuote[cleanName] = master
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func parseMasterTag(content string) string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	lines := strings.Split(content, "\n")
+	if len(lines) > 0 && strings.TrimSpace(lines[0]) == "$$$" {
+		for i := 1; i < len(lines); i++ {
+			line := strings.TrimSpace(lines[i])
+			if line == "$$$" {
+				break
+			}
+			if strings.HasPrefix(line, "MASTER:") {
+				val := strings.TrimSpace(strings.TrimPrefix(line, "MASTER:"))
+				return strings.ToLower(val)
+			}
+		}
+	}
+	return ""
 }
 
 func (am *AssetManager) initCasePonyMap() {
@@ -217,29 +313,40 @@ func (am *AssetManager) parsePoniesAliasFile(content string) {
 
 // GetPonyFile finds and reads the content of a pony file by name.
 // First checks local user folders, then falls back to embedded binary assets.
-func (am *AssetManager) GetPonyFile(name string, allowsNonMLP bool) (string, string, error) {
+// GetPonyFile finds and reads the content of a pony file by name.
+// includeStandard: search standard pony directories ("ponies", "ttyponies")
+// includeExtra: search extra pony directories ("extraponies", "extrattyponies")
+func (am *AssetManager) GetPonyFile(name string, includeStandard bool, includeExtra bool) (string, string, error) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
 
-	return am.getPonyFileLocked(name, allowsNonMLP)
+	return am.getPonyFileLocked(name, includeStandard, includeExtra)
 }
 
-func (am *AssetManager) getPonyFileLocked(name string, allowsNonMLP bool) (string, string, error) {
+func (am *AssetManager) getPonyFileLocked(name string, includeStandard bool, includeExtra bool) (string, string, error) {
 	if name == "" {
-		return am.getRandomPonyFileLocked(allowsNonMLP)
+		return am.getRandomPonyFileLocked(includeStandard, includeExtra)
 	}
 
 	name = am.RemapUCS(name)
 	cleanName := strings.TrimSuffix(name, ".pony")
 
-	dirs := []string{"ponies", "ttyponies"}
-	if allowsNonMLP {
-		dirs = append([]string{"extraponies", "extrattyponies"}, dirs...)
+	var dirs []string
+	var excludedDirs []string
+
+	if includeStandard {
+		dirs = append(dirs, "ponies", "ttyponies")
 	} else {
-		dirs = append(dirs, "extraponies", "extrattyponies")
+		excludedDirs = append(excludedDirs, "ponies", "ttyponies")
 	}
 
-	// 1. Check custom ponies index (if any custom directories exist)
+	if includeExtra {
+		dirs = append(dirs, "extraponies", "extrattyponies")
+	} else {
+		excludedDirs = append(excludedDirs, "extraponies", "extrattyponies")
+	}
+
+	// 1. Check custom ponies index in allowed dirs
 	if len(am.customPonies) > 0 {
 		for _, subDir := range dirs {
 			key := subDir + "/" + cleanName
@@ -252,7 +359,7 @@ func (am *AssetManager) getPonyFileLocked(name string, allowsNonMLP bool) (strin
 		}
 	}
 
-	// 2. Fall back to embedded binary assets
+	// 2. Fall back to embedded binary assets in allowed dirs
 	for _, subDir := range dirs {
 		embedPath := path.Join(subDir, cleanName+".pony")
 		data, err := embeddedFS.ReadFile(embedPath)
@@ -261,34 +368,61 @@ func (am *AssetManager) getPonyFileLocked(name string, allowsNonMLP bool) (strin
 		}
 	}
 
-	// 3. Try case-insensitive lookup
-	if matchedName, ok := am.casePonyMap[strings.ToLower(cleanName)]; ok && matchedName != cleanName {
-		return am.getPonyFileLocked(matchedName, allowsNonMLP)
+	// 3. Check if exact match exists in EXCLUDED dirs
+	if len(am.customPonies) > 0 {
+		for _, subDir := range excludedDirs {
+			key := subDir + "/" + cleanName
+			if _, ok := am.customPonies[key]; ok {
+				return "", "", fmt.Errorf("I have never heard of anypony named %s", name)
+			}
+		}
+	}
+	for _, subDir := range excludedDirs {
+		embedPath := path.Join(subDir, cleanName+".pony")
+		if _, err := embeddedFS.ReadFile(embedPath); err == nil {
+			return "", "", fmt.Errorf("I have never heard of anypony named %s", name)
+		}
 	}
 
-	// 4. Try fuzzy spell correction
-	availablePonies := am.listPoniesLocked(allowsNonMLP, false)
+	// 4. Try case-insensitive lookup within allowed ponies
+	availablePonies := am.listPoniesLocked(includeStandard, includeExtra)
+	lowerClean := strings.ToLower(cleanName)
+	for _, p := range availablePonies {
+		if strings.ToLower(p) == lowerClean {
+			return am.getPonyFileLocked(p, includeStandard, includeExtra)
+		}
+	}
+
+	// 5. Try fuzzy spell correction against allowed ponies
 	corrector := NewSpelloCorrecter()
 	bestMatches, _ := corrector.Correct(cleanName, availablePonies)
 	if len(bestMatches) > 0 {
 		chosen := bestMatches[am.rnd.Intn(len(bestMatches))]
-		return am.getPonyFileLocked(chosen, allowsNonMLP)
+		return am.getPonyFileLocked(chosen, includeStandard, includeExtra)
 	}
 
 	return "", "", fmt.Errorf("I have never heard of anypony named %s", name)
 }
 
 // GetRandomPonyFile picks a random pony.
-func (am *AssetManager) GetRandomPonyFile(allowsNonMLP bool) (string, string, error) {
+func (am *AssetManager) GetRandomPonyFile(includeStandard bool, includeExtra bool) (string, string, error) {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 
-	return am.getRandomPonyFileLocked(allowsNonMLP)
+	return am.getRandomPonyFileLocked(includeStandard, includeExtra)
 }
 
-func (am *AssetManager) getRandomPonyFileLocked(allowsNonMLP bool) (string, string, error) {
+func (am *AssetManager) getRandomPonyFileLocked(includeStandard bool, includeExtra bool) (string, string, error) {
+	var checkDirs []string
+	if includeStandard {
+		checkDirs = append(checkDirs, "ponies")
+	}
+	if includeExtra {
+		checkDirs = append(checkDirs, "extraponies")
+	}
+
 	// 1. Check for best.pony fallback
-	for _, subDir := range []string{"ponies", "extraponies"} {
+	for _, subDir := range checkDirs {
 		if diskPath, ok := am.customPonies[subDir+"/best"]; ok {
 			if data, err := os.ReadFile(diskPath); err == nil {
 				return "best", string(data), nil
@@ -299,29 +433,32 @@ func (am *AssetManager) getRandomPonyFileLocked(allowsNonMLP bool) (string, stri
 		}
 	}
 
-	ponies := am.listPoniesLocked(allowsNonMLP, false)
+	ponies := am.listPoniesLocked(includeStandard, includeExtra)
 	if len(ponies) == 0 {
 		return "", "", fmt.Errorf("no ponies available")
 	}
 
-	fittingPonies := am.FilterFittingPonies(ponies, allowsNonMLP)
+	fittingPonies := am.FilterFittingPonies(ponies, includeStandard, includeExtra)
 	chosen := fittingPonies[am.rnd.Intn(len(fittingPonies))]
-	return am.getPonyFileLocked(chosen, allowsNonMLP)
+	return am.getPonyFileLocked(chosen, includeStandard, includeExtra)
 }
 
 // ListPonies returns sorted list of available pony names (combining local FS & embedded).
-func (am *AssetManager) ListPonies(allowsNonMLP bool, includeExtra bool) []string {
+func (am *AssetManager) ListPonies(includeStandard bool, includeExtra bool) []string {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
 
-	return am.listPoniesLocked(allowsNonMLP, includeExtra)
+	return am.listPoniesLocked(includeStandard, includeExtra)
 }
 
-func (am *AssetManager) listPoniesLocked(allowsNonMLP bool, includeExtra bool) []string {
+func (am *AssetManager) listPoniesLocked(includeStandard bool, includeExtra bool) []string {
 	seen := make(map[string]bool)
 
-	dirs := []string{"ponies"}
-	if allowsNonMLP || includeExtra {
+	var dirs []string
+	if includeStandard {
+		dirs = append(dirs, "ponies")
+	}
+	if includeExtra {
 		dirs = append(dirs, "extraponies")
 	}
 
@@ -360,29 +497,442 @@ func (am *AssetManager) listPoniesLocked(allowsNonMLP bool, includeExtra bool) [
 	return result
 }
 
-// ListPoniesWithAliases returns pony names formatted with alternative names (aliases).
-func (am *AssetManager) ListPoniesWithAliases(allowsNonMLP bool, includeExtra bool) []string {
+// ListPoniesFormatted returns pony names formatted with bold ANSI codes for ponies that have quotes.
+func (am *AssetManager) ListPoniesFormatted(includeStandard bool, includeExtra bool) []string {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
 
-	basePonies := am.listPoniesLocked(allowsNonMLP, includeExtra)
-	var result []string
+	basePonies := am.listPoniesLocked(includeStandard, includeExtra)
+	quoters := make(map[string]bool)
+	for q := range am.quoteFiles {
+		quoters[q] = true
+	}
 
+	var result []string
 	for _, p := range basePonies {
-		if aliasesMap, ok := am.ponyAliases[p]; ok && len(aliasesMap) > 1 {
-			var altList []string
-			for alt := range aliasesMap {
-				if alt != p {
-					altList = append(altList, alt)
-				}
-			}
-			sort.Strings(altList)
-			result = append(result, fmt.Sprintf("%s (%s)", p, strings.Join(altList, ", ")))
+		if quoters[p] {
+			result = append(result, "\x1b[1m"+p+"\x1b[0m")
 		} else {
 			result = append(result, p)
 		}
 	}
 	return result
+}
+
+var symlinkMap = map[string][]string{
+	// ponies/
+	"airheart":       {"jetstream"},
+	"blinkie":        {"limestone"},
+	"blueberry":      {"berrydreams"},
+	"blues":          {"noteworthy"},
+	"bonbon":         {"sweetiedrops"},
+	"boxxy":          {"craftycrate"},
+	"caballeron":     {"drcaballeron"},
+	"carrot":         {"carrottop", "goldenharvest"},
+	"carrotcake":     {"carecake"},
+	"clyde":          {"igneousrock"},
+	"coldheart":      {"snowheart"},
+	"colgate":        {"minuette"},
+	"flashsentry":    {"brad"},
+	"fleurdelis":     {"fleurdislee"},
+	"grace":          {"manewitz"},
+	"hairytipper":    {"dancefever"},
+	"highscore":      {"buttonmash"},
+	"horsemd":        {"doctop"},
+	"hughjelly":      {"hughbertjellius"},
+	"inky":           {"marble"},
+	"lilyvalley":     {"lily"},
+	"lotus":          {"lotusblossom"},
+	"lovemelody":     {"venus"},
+	"lyra":           {"harpass", "heartstrings"},
+	"lyrabonbon":     {"bonbonlyra"},
+	"manticore":      {"mannyroar"},
+	"maybelle":       {"mabel"},
+	"misspommel":     {"cocopommel"},
+	"mrsparkle":      {"nightlight"},
+	"mrssparkle":     {"twilightvelvet"},
+	"oinkoinkoink":   {"pinkieoink"},
+	"perrypierce":    {"perry"},
+	"pokeypierce":    {"royalpin"},
+	"powderrouge":    {"sindy"},
+	"prettyvision":   {"elsie"},
+	"quickfix":       {"clockwork", "epona"},
+	"raindrops":      {"sunshowerraindrops"},
+	"rara":           {"countess"},
+	"raritysdad":     {"hondoflanks", "magnum"},
+	"raritysmom":     {"bettybouffant", "cookiecrumbles", "pearl"},
+	"ravenunicorn":   {"raven"},
+	"rose":           {"roseluck"},
+	"ruby":           {"berrypinch"},
+	"snowflake":      {"bulkbiceps", "horsepower"},
+	"sparkler":       {"amethyststar"},
+	"stormyflare":    {"spitfiresmom"},
+	"sue":            {"cloudyquartz"},
+	"timeturner":     {"drhooves"},
+	"trixie":         {"lulamoon", "trixielulamoon"},
+	"vinyl":          {"djpon-3"},
+	"violet":         {"royalribbon"},
+	"waltercoltchak": {"walter"},
+
+	// extraponies/
+	"barbara":          {"barbra"},
+	"internetexplorer": {"ie"},
+}
+
+// ListPoniesWithAliases returns pony names formatted with alternative names (aliases).
+func (am *AssetManager) ListPoniesWithAliases(includeStandard bool, includeExtra bool) []string {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
+	basePonies := am.listPoniesLocked(includeStandard, includeExtra)
+	quoters := make(map[string]bool)
+	for q := range am.quoteFiles {
+		quoters[q] = true
+	}
+
+	var result []string
+	for _, p := range basePonies {
+		displayPony := p
+		if quoters[p] {
+			displayPony = "\x1b[1m" + p + "\x1b[0m"
+		}
+
+		if syms, ok := symlinkMap[p]; ok && len(syms) > 0 {
+			var altList []string
+			for _, alt := range syms {
+				if quoters[alt] {
+					altList = append(altList, "\x1b[1m"+alt+"\x1b[0m")
+				} else {
+					altList = append(altList, alt)
+				}
+			}
+			sort.Strings(altList)
+			if len(altList) > 0 {
+				result = append(result, fmt.Sprintf("%s (%s)", displayPony, strings.Join(altList, " ")))
+			} else {
+				result = append(result, displayPony)
+			}
+		} else {
+			result = append(result, displayPony)
+		}
+	}
+	return result
+}
+
+// PonyGroup represents a collection of ponies originating from a specific directory source.
+type PonyGroup struct {
+	DirectoryPath string
+	Ponies        []string
+}
+
+func (am *AssetManager) applyUCSInList(groupPonies []string, dynamicSymlinks map[string][]string) []string {
+	envVal := strings.ToLower(os.Getenv("PONYSAY_UCS_ME"))
+	ucsConf := 0
+	if envVal == "yes" || envVal == "y" || envVal == "1" {
+		ucsConf = 1
+	} else if envVal == "harder" || envVal == "h" || envVal == "2" {
+		ucsConf = 2
+	}
+
+	if ucsConf == 0 {
+		return groupPonies
+	}
+
+	if ucsConf == 1 {
+		var additions []string
+		for _, p := range groupPonies {
+			if ucs, ok := am.reverseUCSMap[p]; ok {
+				additions = append(additions, ucs)
+				if dynamicSymlinks != nil {
+					dynamicSymlinks[p] = append(dynamicSymlinks[p], ucs)
+				}
+			}
+		}
+		groupPonies = append(groupPonies, additions...)
+	} else if ucsConf == 2 {
+		for i, p := range groupPonies {
+			if ucs, ok := am.reverseUCSMap[p]; ok {
+				groupPonies[i] = ucs
+			}
+		}
+	}
+
+	return groupPonies
+}
+
+// GetPonyGroups returns ponies grouped by their source directory (with directory paths for headers).
+func (am *AssetManager) GetPonyGroups(includeStandard bool, includeExtra bool, withAliases bool, formatted bool) []PonyGroup {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
+	var targetSubdirs []string
+	if includeStandard {
+		targetSubdirs = append(targetSubdirs, "ponies")
+	}
+	if includeExtra {
+		targetSubdirs = append(targetSubdirs, "extraponies")
+	}
+
+	quoters := make(map[string]bool)
+	for q := range am.quoteFiles {
+		quoters[q] = true
+	}
+
+	var groups []PonyGroup
+
+	for _, subDir := range targetSubdirs {
+		seenInGroup := make(map[string]bool)
+		var displayDirPath string
+		var groupPonies []string
+		dynamicSymlinks := make(map[string][]string)
+
+		// 1. Custom FS search
+		for _, baseDir := range am.customDirs {
+			dPath := filepath.Join(baseDir, subDir)
+			if st, err := os.Stat(dPath); err == nil && st.IsDir() {
+				entries, err := os.ReadDir(dPath)
+				if err == nil {
+					for _, entry := range entries {
+						if strings.HasSuffix(entry.Name(), ".pony") {
+							name := strings.TrimSuffix(entry.Name(), ".pony")
+							if !seenInGroup[name] {
+								seenInGroup[name] = true
+								groupPonies = append(groupPonies, name)
+							}
+
+							fullPath := filepath.Join(dPath, entry.Name())
+							if lst, err := os.Lstat(fullPath); err == nil && (lst.Mode()&os.ModeSymlink != 0) {
+								if target, err := os.Readlink(fullPath); err == nil {
+									targetName := strings.TrimSuffix(filepath.Base(target), ".pony")
+									if targetName != "" && targetName != name {
+										dynamicSymlinks[targetName] = append(dynamicSymlinks[targetName], name)
+									}
+								}
+							}
+						}
+					}
+				}
+				if len(groupPonies) > 0 && displayDirPath == "" {
+					displayDirPath = filepath.Clean(dPath) + "/"
+				}
+			}
+		}
+
+		// 2. Embedded FS fallback
+		if len(groupPonies) == 0 {
+			entries, err := embeddedFS.ReadDir(subDir)
+			if err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pony") {
+						name := strings.TrimSuffix(entry.Name(), ".pony")
+						if !seenInGroup[name] {
+							seenInGroup[name] = true
+							groupPonies = append(groupPonies, name)
+						}
+					}
+				}
+			}
+			if displayDirPath == "" {
+				displayDirPath = "bundled:" + subDir + "/"
+			}
+		}
+
+		if len(groupPonies) == 0 {
+			continue
+		}
+
+		groupPonies = am.applyUCSInList(groupPonies, dynamicSymlinks)
+
+		var finalItems []string
+
+		if !withAliases {
+			sort.Strings(groupPonies)
+			for _, p := range groupPonies {
+				displayPony := p
+				if formatted && quoters[p] {
+					displayPony = "\x1b[1m" + p + "\x1b[0m"
+				}
+				finalItems = append(finalItems, displayPony)
+			}
+		} else {
+			aliasMap := make(map[string][]string)
+			allAliases := make(map[string]bool)
+
+			for target, syms := range dynamicSymlinks {
+				for _, sym := range syms {
+					aliasMap[target] = append(aliasMap[target], sym)
+					allAliases[sym] = true
+				}
+			}
+
+			for _, p := range groupPonies {
+				if syms, ok := symlinkMap[p]; ok {
+					for _, sym := range syms {
+						aliasMap[p] = append(aliasMap[p], sym)
+						allAliases[sym] = true
+					}
+				}
+			}
+
+			var topPonies []string
+			for _, p := range groupPonies {
+				if !allAliases[p] {
+					topPonies = append(topPonies, p)
+				}
+			}
+			sort.Strings(topPonies)
+
+			for _, p := range topPonies {
+				displayPony := p
+				if formatted && quoters[p] {
+					displayPony = "\x1b[1m" + p + "\x1b[0m"
+				}
+
+				if syms, ok := aliasMap[p]; ok && len(syms) > 0 {
+					symSet := make(map[string]bool)
+					var altList []string
+					for _, alt := range syms {
+						if !symSet[alt] {
+							symSet[alt] = true
+							if formatted && quoters[alt] {
+								altList = append(altList, "\x1b[1m"+alt+"\x1b[0m")
+							} else {
+								altList = append(altList, alt)
+							}
+						}
+					}
+					sort.Strings(altList)
+					if len(altList) > 0 {
+						displayPony = fmt.Sprintf("%s (%s)", displayPony, strings.Join(altList, " "))
+					}
+				}
+				finalItems = append(finalItems, displayPony)
+			}
+		}
+
+		groups = append(groups, PonyGroup{
+			DirectoryPath: displayDirPath,
+			Ponies:        finalItems,
+		})
+	}
+
+	return groups
+}
+
+// ListPoniesOneList returns a sorted list of unique pony names without formatting or grouping.
+func (am *AssetManager) ListPoniesOneList(includeStandard bool, includeExtra bool) []string {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
+	var targetSubdirs []string
+	if includeStandard {
+		targetSubdirs = append(targetSubdirs, "ponies")
+	}
+	if includeExtra {
+		targetSubdirs = append(targetSubdirs, "extraponies")
+	}
+
+	seen := make(map[string]bool)
+	var ponies []string
+
+	for _, subDir := range targetSubdirs {
+		for _, baseDir := range am.customDirs {
+			dPath := filepath.Join(baseDir, subDir)
+			if entries, err := os.ReadDir(dPath); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(entry.Name(), ".pony") {
+						name := strings.TrimSuffix(entry.Name(), ".pony")
+						if !seen[name] {
+							seen[name] = true
+							ponies = append(ponies, name)
+						}
+					}
+				}
+			}
+		}
+
+		if entries, err := embeddedFS.ReadDir(subDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pony") {
+					name := strings.TrimSuffix(entry.Name(), ".pony")
+					if !seen[name] {
+						seen[name] = true
+						ponies = append(ponies, name)
+					}
+				}
+			}
+		}
+	}
+
+	ponies = am.applyUCSInList(ponies, nil)
+
+	sort.Strings(ponies)
+	var unique []string
+	last := ""
+	for _, p := range ponies {
+		if p != last {
+			unique = append(unique, p)
+			last = p
+		}
+	}
+
+	return unique
+}
+
+// ListQuoters returns sorted list of all ponies that have quotes.
+func (am *AssetManager) ListQuoters(includeStandard bool, includeExtra bool) []string {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+
+	return am.listQuotersLocked(includeStandard, includeExtra)
+}
+
+func (am *AssetManager) listQuotersLocked(includeStandard bool, includeExtra bool) []string {
+	var targetSubdirs []string
+	if includeStandard {
+		targetSubdirs = append(targetSubdirs, "ponies")
+	}
+	if includeExtra {
+		targetSubdirs = append(targetSubdirs, "extraponies")
+	}
+
+	availablePonies := make(map[string]bool)
+	for _, subDir := range targetSubdirs {
+		for _, baseDir := range am.customDirs {
+			dPath := filepath.Join(baseDir, subDir)
+			if entries, err := os.ReadDir(dPath); err == nil {
+				for _, entry := range entries {
+					if strings.HasSuffix(entry.Name(), ".pony") {
+						availablePonies[strings.TrimSuffix(entry.Name(), ".pony")] = true
+					}
+				}
+			}
+		}
+		if entries, err := embeddedFS.ReadDir(subDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pony") {
+					availablePonies[strings.TrimSuffix(entry.Name(), ".pony")] = true
+				}
+			}
+		}
+	}
+
+	var quoters []string
+	for ponyName, files := range am.quoteFiles {
+		if len(files) > 0 && availablePonies[ponyName] {
+			quoters = append(quoters, ponyName)
+		}
+	}
+	sort.Strings(quoters)
+	var unique []string
+	last := ""
+	for _, q := range quoters {
+		if q != last {
+			unique = append(unique, q)
+			last = q
+		}
+	}
+	return unique
 }
 
 // GetBalloonContent returns the contents of a balloon style file.
@@ -467,89 +1017,77 @@ func (am *AssetManager) ListBalloons(isThink bool) []string {
 	return list
 }
 
-// ListQuoters returns sorted list of all ponies that have quotes.
-func (am *AssetManager) ListQuoters() []string {
-	am.mu.RLock()
-	defer am.mu.RUnlock()
-
-	return am.listQuotersLocked()
-}
-
-func (am *AssetManager) listQuotersLocked() []string {
-	var quoters []string
-	for ponyName, files := range am.quoteFiles {
-		if len(files) > 0 {
-			quoters = append(quoters, ponyName)
-		}
-	}
-	sort.Strings(quoters)
-	return quoters
-}
-
-func (am *AssetManager) resolveQuotePonyLocked(name string) string {
+func (am *AssetManager) resolveQuotePonyLocked(name string) (string, string) {
 	if name == "" {
-		return ""
+		return "", ""
 	}
 	name = am.RemapUCS(name)
 	cleanName := strings.ToLower(strings.TrimSuffix(name, ".pony"))
 
-	// 1. Direct match in aliasToQuote or quoteFiles
-	if base, ok := am.aliasToQuote[cleanName]; ok {
-		if files, ok2 := am.quoteFiles[base]; ok2 && len(files) > 0 {
-			return base
-		}
+	hasQuotes := func(quoteKey string) bool {
+		files, ok := am.quoteFiles[quoteKey]
+		return ok && len(files) > 0
 	}
-	if files, ok := am.quoteFiles[cleanName]; ok && len(files) > 0 {
-		return cleanName
+
+	// 1. Direct match in aliasToQuote or quoteFiles
+	if base, ok := am.aliasToQuote[cleanName]; ok && hasQuotes(base) {
+		targetPony := cleanName
+		if matched, ok := am.casePonyMap[cleanName]; ok {
+			targetPony = matched
+		}
+		return targetPony, base
+	}
+	if hasQuotes(cleanName) {
+		targetPony := cleanName
+		if matched, ok := am.casePonyMap[cleanName]; ok {
+			targetPony = matched
+		}
+		return targetPony, cleanName
 	}
 
 	// 2. Case-insensitive check
 	if matchedName, ok := am.casePonyMap[cleanName]; ok {
 		cleanMatched := strings.ToLower(matchedName)
-		if base, ok := am.aliasToQuote[cleanMatched]; ok {
-			if files, ok2 := am.quoteFiles[base]; ok2 && len(files) > 0 {
-				return base
-			}
+		if base, ok := am.aliasToQuote[cleanMatched]; ok && hasQuotes(base) {
+			return matchedName, base
 		}
-		if files, ok := am.quoteFiles[cleanMatched]; ok && len(files) > 0 {
-			return cleanMatched
+		if hasQuotes(cleanMatched) {
+			return matchedName, cleanMatched
 		}
 	}
 
-	// 3. Fuzzy search against all available quoters
-	quoters := am.listQuotersLocked()
-	if len(quoters) > 0 {
-		corrector := NewSpelloCorrecter()
-		bestMatches, _ := corrector.Correct(cleanName, quoters)
-		if len(bestMatches) > 0 {
-			chosen := bestMatches[am.rnd.Intn(len(bestMatches))]
-			if base, ok := am.aliasToQuote[chosen]; ok {
-				return base
-			}
-			return chosen
-		}
-	}
-
-	// 4. Fuzzy search against all pony names
-	availablePonies := am.listPoniesLocked(true, false)
+	// 3. Fuzzy search against all available ponies first (to preserve requested variant name)
+	availablePonies := am.listPoniesLocked(true, true)
 	if len(availablePonies) > 0 {
 		corrector := NewSpelloCorrecter()
 		bestMatches, _ := corrector.Correct(cleanName, availablePonies)
 		if len(bestMatches) > 0 {
-			chosen := bestMatches[am.rnd.Intn(len(bestMatches))]
-			cleanChosen := strings.ToLower(chosen)
-			if base, ok := am.aliasToQuote[cleanChosen]; ok {
-				if files, ok2 := am.quoteFiles[base]; ok2 && len(files) > 0 {
-					return base
-				}
+			chosenPony := bestMatches[am.rnd.Intn(len(bestMatches))]
+			cleanChosen := strings.ToLower(chosenPony)
+			if base, ok := am.aliasToQuote[cleanChosen]; ok && hasQuotes(base) {
+				return chosenPony, base
 			}
-			if files, ok := am.quoteFiles[cleanChosen]; ok && len(files) > 0 {
-				return cleanChosen
+			if hasQuotes(cleanChosen) {
+				return chosenPony, cleanChosen
 			}
 		}
 	}
 
-	return cleanName
+	// 4. Fuzzy search against all available quoters
+	quoters := am.listQuotersLocked(true, true)
+	if len(quoters) > 0 {
+		corrector := NewSpelloCorrecter()
+		bestMatches, _ := corrector.Correct(cleanName, quoters)
+		if len(bestMatches) > 0 {
+			chosenQuoter := bestMatches[am.rnd.Intn(len(bestMatches))]
+			if base, ok := am.aliasToQuote[chosenQuoter]; ok && hasQuotes(base) {
+				return chosenQuoter, base
+			}
+			return chosenQuoter, chosenQuoter
+		}
+	}
+
+	return cleanName, cleanName
 }
 
 // GetPonyQuote selects a quote and corresponding pony name.
@@ -562,10 +1100,9 @@ func (am *AssetManager) GetPonyQuote(choices []string) (string, string, error) {
 
 	if len(choices) > 0 {
 		chosenChoice := choices[am.rnd.Intn(len(choices))]
-		baseQuoteKey = am.resolveQuotePonyLocked(chosenChoice)
-		targetPony = baseQuoteKey
+		targetPony, baseQuoteKey = am.resolveQuotePonyLocked(chosenChoice)
 	} else {
-		quoters := am.listQuotersLocked()
+		quoters := am.listQuotersLocked(true, true)
 		if len(quoters) == 0 {
 			return "derpy", "Zecora! Help me, I am mute!", nil
 		}
@@ -599,4 +1136,3 @@ func (am *AssetManager) GetPonyQuote(choices []string) (string, string, error) {
 
 	return targetPony, quoteText, nil
 }
-

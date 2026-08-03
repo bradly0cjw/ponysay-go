@@ -8,13 +8,13 @@ func TestAssetManagerPonies(t *testing.T) {
 	am := NewAssetManager()
 
 	// Test listing ponies
-	ponies := am.ListPonies(false, false)
+	ponies := am.ListPonies(true, false)
 	if len(ponies) == 0 {
 		t.Fatalf("Expected non-empty list of MLP ponies")
 	}
 
 	// Test getting derpy pony
-	name, content, err := am.GetPonyFile("derpy", false)
+	name, content, err := am.GetPonyFile("derpy", true, false)
 	if err != nil {
 		t.Fatalf("Failed to get derpy pony: %v", err)
 	}
@@ -26,7 +26,7 @@ func TestAssetManagerPonies(t *testing.T) {
 	}
 
 	// Test getting random pony
-	rName, rContent, err := am.GetRandomPonyFile(false)
+	rName, rContent, err := am.GetRandomPonyFile(true, false)
 	if err != nil {
 		t.Fatalf("Failed to get random pony: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestAssetManagerBalloons(t *testing.T) {
 func TestAssetManagerQuotes(t *testing.T) {
 	am := NewAssetManager()
 
-	quoters := am.ListQuoters()
+	quoters := am.ListQuoters(true, false)
 	if len(quoters) == 0 {
 		t.Fatalf("Expected non-empty list of quoters")
 	}
@@ -101,6 +101,30 @@ func TestAssetManagerQuotes(t *testing.T) {
 	if qFuzzy == "" || qFuzzy == "Zecora! Help me, I am mute!" {
 		t.Errorf("Expected valid Fluttershy quote, got: %s", qFuzzy)
 	}
+
+	// Test variant quote lookup (e.g. lunafly should resolve pony name to lunafly with luna quote)
+	pNameVariant, qVariant, err := am.GetPonyQuote([]string{"lunafly"})
+	if err != nil {
+		t.Fatalf("Failed to get variant quote for lunafly: %v", err)
+	}
+	if pNameVariant != "lunafly" {
+		t.Errorf("Expected variant quote pony to resolve to lunafly, got %s", pNameVariant)
+	}
+	if qVariant == "" || qVariant == "Zecora! Help me, I am mute!" {
+		t.Errorf("Expected valid Luna quote for lunafly variant, got: %s", qVariant)
+	}
+
+	// Test MASTER metadata tag quote lookup (e.g. woona has MASTER: luna)
+	pNameWoona, qWoona, err := am.GetPonyQuote([]string{"woona"})
+	if err != nil {
+		t.Fatalf("Failed to get quote for woona: %v", err)
+	}
+	if pNameWoona != "woona" {
+		t.Errorf("Expected MASTER quote pony to resolve to woona, got %s", pNameWoona)
+	}
+	if qWoona == "" || qWoona == "Zecora! Help me, I am mute!" {
+		t.Errorf("Expected valid Luna quote for woona (via MASTER tag), got: %s", qWoona)
+	}
 }
 
 func TestAssetManagerConcurrency(t *testing.T) {
@@ -110,8 +134,8 @@ func TestAssetManagerConcurrency(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			for j := 0; j < 50; j++ {
-				_, _, _ = am.GetPonyFile("derpy", false)
-				_, _, _ = am.GetRandomPonyFile(false)
+				_, _, _ = am.GetPonyFile("derpy", true, false)
+				_, _, _ = am.GetRandomPonyFile(true, false)
 				_ = am.ListPonies(true, true)
 				_, _ = am.GetBalloonContent("cowsay", false)
 				_ = am.ListBalloons(false)
@@ -125,5 +149,3 @@ func TestAssetManagerConcurrency(t *testing.T) {
 		<-done
 	}
 }
-
-

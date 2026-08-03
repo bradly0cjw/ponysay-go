@@ -1,6 +1,7 @@
 package pony
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,9 +15,49 @@ var balloonTagRegex = regexp.MustCompile(`\$balloon[0-9a-zA-Z,]*\$`)
 type Pony struct {
 	Name          string
 	Metadata      map[string]string
+	RawInfo       string
+	HasInfo       bool
 	BalloonTop    int
 	BalloonBottom int
 	BodyLines     []string
+}
+
+// FormatInfo formats metadata text according to ponysay's formatting rules.
+// Tag lines with ALL-CAPS keys (A-Z and space) are formatted as "\x1b[1mKEY\x1b[21m: value".
+// Non-tag lines (comments) are preserved after the tag section.
+func FormatInfo(info string) string {
+	lines := strings.Split(info, "\n")
+	var tags []string
+	var comments []string
+
+	for _, line := range lines {
+		sep := strings.Index(line, ":")
+		if sep > 0 {
+			key := line[:sep]
+			test := key
+			for _, c := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ " {
+				test = strings.ReplaceAll(test, string(c), "")
+			}
+			if len(test) == 0 && len(strings.TrimSpace(key)) > 0 {
+				value := strings.TrimSpace(line[sep+1:])
+				formattedLine := fmt.Sprintf("\x1b[1m%s\x1b[22m: %s", strings.TrimSpace(key), value)
+				tags = append(tags, formattedLine)
+				continue
+			}
+		}
+		comments = append(comments, line)
+	}
+
+	commentStr := strings.Join(comments, "\n")
+	commentStr = strings.TrimLeft(commentStr, "\n")
+
+	res := strings.Join(tags, "\n")
+	if len(tags) > 0 && len(commentStr) > 0 {
+		res += "\n\n" + commentStr
+	} else if len(commentStr) > 0 {
+		res += commentStr
+	}
+	return res
 }
 
 // ParsePony parses the raw content of a .pony file.
@@ -40,6 +81,8 @@ func ParsePony(name, rawContent string) (*Pony, error) {
 		}
 
 		if endIdx != -1 {
+			p.HasInfo = true
+			p.RawInfo = strings.Join(lines[1:endIdx], "\n")
 			for _, metaLine := range lines[1:endIdx] {
 				idx := strings.Index(metaLine, ":")
 				if idx > 0 {
@@ -143,4 +186,3 @@ func (p *Pony) RenderPonyOnly() string {
 
 	return strings.Join(output, "\n")
 }
-

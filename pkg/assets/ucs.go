@@ -8,6 +8,7 @@ import (
 
 func (am *AssetManager) initUCSMap() {
 	am.ucsMap = make(map[string]string)
+	am.reverseUCSMap = make(map[string]string)
 
 	parseMap := func(content string) {
 		lines := strings.Split(content, "\n")
@@ -21,6 +22,7 @@ func (am *AssetManager) initUCSMap() {
 				ucs := strings.TrimSpace(parts[0])
 				ascii := strings.TrimSpace(parts[1])
 				am.ucsMap[ucs] = ascii
+				am.reverseUCSMap[ascii] = ucs
 			}
 		}
 	}
