@@ -4,6 +4,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"ponysay-go/pkg/color"
 )
 
 func TestCLIFullFeatureSuite(t *testing.T) {
@@ -111,8 +113,14 @@ func TestCLIFullFeatureSuite(t *testing.T) {
 	// 10. Test Metadata Info (-i and +i)
 	infoCmd := exec.Command("./ponysay_test_bin", "-f", "derpy", "-i")
 	infoOut, _ := infoCmd.CombinedOutput()
-	if !strings.Contains(string(infoOut), "NAME:") {
-		t.Errorf("-i metadata info failed")
+	if !strings.Contains(color.StripANSI(string(infoOut)), "NAME: Derpy") {
+		t.Errorf("-i metadata info failed, output: %s", string(infoOut))
+	}
+
+	plusInfoCmd := exec.Command("./ponysay_test_bin", "-f", "derpy", "+i")
+	plusInfoOut, _ := plusInfoCmd.CombinedOutput()
+	if !strings.Contains(color.StripANSI(string(plusInfoOut)), "NAME: Derpy") {
+		t.Errorf("+i metadata info failed, output: %s", string(plusInfoOut))
 	}
 
 	// 11. Test Pony Only (-o)

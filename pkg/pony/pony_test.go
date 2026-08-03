@@ -1,6 +1,7 @@
 package pony
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -31,8 +32,23 @@ $balloon9$
 		t.Errorf("Expected BalloonTop 4, got %d", p.BalloonTop)
 	}
 
+	if !p.HasInfo {
+		t.Errorf("Expected HasInfo to be true")
+	}
+
 	if len(p.BodyLines) < 2 {
 		t.Errorf("Expected at least 2 body lines")
+	}
+}
+
+func TestFormatInfo(t *testing.T) {
+	rawInfo := "NAME: Derpy\nCOAT: grey\n\nThis is a comment"
+	formatted := FormatInfo(rawInfo)
+	if !strings.Contains(formatted, "\x1b[1mNAME\x1b[22m: Derpy") {
+		t.Errorf("FormatInfo failed to format tag NAME, got %q", formatted)
+	}
+	if !strings.Contains(formatted, "This is a comment") {
+		t.Errorf("FormatInfo missing comment, got %q", formatted)
 	}
 }
 

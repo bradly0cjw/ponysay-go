@@ -101,6 +101,30 @@ func TestAssetManagerQuotes(t *testing.T) {
 	if qFuzzy == "" || qFuzzy == "Zecora! Help me, I am mute!" {
 		t.Errorf("Expected valid Fluttershy quote, got: %s", qFuzzy)
 	}
+
+	// Test variant quote lookup (e.g. lunafly should resolve pony name to lunafly with luna quote)
+	pNameVariant, qVariant, err := am.GetPonyQuote([]string{"lunafly"})
+	if err != nil {
+		t.Fatalf("Failed to get variant quote for lunafly: %v", err)
+	}
+	if pNameVariant != "lunafly" {
+		t.Errorf("Expected variant quote pony to resolve to lunafly, got %s", pNameVariant)
+	}
+	if qVariant == "" || qVariant == "Zecora! Help me, I am mute!" {
+		t.Errorf("Expected valid Luna quote for lunafly variant, got: %s", qVariant)
+	}
+
+	// Test MASTER metadata tag quote lookup (e.g. woona has MASTER: luna)
+	pNameWoona, qWoona, err := am.GetPonyQuote([]string{"woona"})
+	if err != nil {
+		t.Fatalf("Failed to get quote for woona: %v", err)
+	}
+	if pNameWoona != "woona" {
+		t.Errorf("Expected MASTER quote pony to resolve to woona, got %s", pNameWoona)
+	}
+	if qWoona == "" || qWoona == "Zecora! Help me, I am mute!" {
+		t.Errorf("Expected valid Luna quote for woona (via MASTER tag), got: %s", qWoona)
+	}
 }
 
 func TestAssetManagerConcurrency(t *testing.T) {

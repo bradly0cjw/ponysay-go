@@ -474,16 +474,25 @@ func main() {
 	}
 
 	// Info mode handling
-	if infoLevel > 0 {
-		fmt.Printf("NAME: %s\n", p.Name)
-		for k, v := range p.Metadata {
-			if infoLevel == 2 {
-				fmt.Printf("\x1b[1m%s\x1b[0m: %s\n", k, v)
-			} else {
-				fmt.Printf("%s: %s\n", k, v)
-			}
+	if infoLevel == 2 {
+		// +i / ++info mode: Metadata is formatted as the balloon message
+		if p.HasInfo {
+			message = pony.FormatInfo(p.RawInfo)
+		} else {
+			message = "\x1b[01;31mI am the mysterious mare...\x1b[21;39m"
 		}
-		os.Exit(0)
+	} else if infoLevel == 1 {
+		// -i / --info mode: Metadata replaces the pony artwork
+		p.BalloonTop = 0
+		p.BalloonBottom = 0
+		if p.HasInfo {
+			infoText := pony.FormatInfo(p.RawInfo)
+			infoTextEscaped := strings.ReplaceAll(infoText, "$", "$$")
+			infoLines := strings.Split(infoTextEscaped, "\n")
+			p.BodyLines = append([]string{"$balloon$"}, infoLines...)
+		} else {
+			p.BodyLines = []string{"$balloon$", "There is not metadata for this pony file"}
+		}
 	}
 
 	if ponyOnly {
