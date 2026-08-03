@@ -118,22 +118,26 @@ if [ "$ENABLE_TERMINAL" -eq 1 ]; then
         echo "Terminal hook already present in ${RC_FILE}, skipping."
     else
         echo ""
-        echo "Adding ponysay startup hook to ${RC_FILE}..."
+        echo "Adding ponysay startup hook to the top of ${RC_FILE}..."
         mkdir -p "$(dirname "$RC_FILE")"
         if [ "$SHELL_NAME" = "fish" ]; then
-            cat >> "$RC_FILE" << 'FISHEOF'
-
-# ponysay-go terminal greeting
+            HOOK_BLOCK="# ponysay-go terminal greeting
 if command -qs ponysay
     ponysay -q
 end
-FISHEOF
+"
         else
-            cat >> "$RC_FILE" << 'SHEOF'
-
-# ponysay-go terminal greeting
+            HOOK_BLOCK="# ponysay-go terminal greeting
 if command -v ponysay >/dev/null 2>&1; then ponysay -q; fi
-SHEOF
+"
+        fi
+        # Prepend hook to the top of the RC file
+        if [ -f "$RC_FILE" ]; then
+            HOOK_TMP="$(mktemp)"
+            printf '%s\n' "$HOOK_BLOCK" | cat - "$RC_FILE" > "$HOOK_TMP"
+            mv "$HOOK_TMP" "$RC_FILE"
+        else
+            printf '%s\n' "$HOOK_BLOCK" > "$RC_FILE"
         fi
         echo "Done! A random pony quote will greet you on every new shell."
         echo "To remove it later, delete the 'ponysay-go terminal greeting' block from ${RC_FILE}."

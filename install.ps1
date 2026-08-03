@@ -75,17 +75,23 @@ if ($Terminal) {
         Write-Host "Terminal hook already present in $profilePath, skipping."
     } else {
         Write-Host ""
-        Write-Host "Adding ponysay startup hook to $profilePath..."
+        Write-Host "Adding ponysay startup hook to the top of $profilePath..."
         $profileDir = Split-Path -Path $profilePath -Parent
         if (-not (Test-Path -Path $profileDir)) {
             New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
         }
         $hookBlock = @"
-
 $marker
 if (Get-Command ponysay -ErrorAction SilentlyContinue) { ponysay -q }
+
 "@
-        Add-Content -Path $profilePath -Value $hookBlock
+        # Prepend hook to the top of the profile
+        if (Test-Path -Path $profilePath) {
+            $existingContent = Get-Content -Path $profilePath -Raw
+            Set-Content -Path $profilePath -Value ($hookBlock + $existingContent) -NoNewline
+        } else {
+            Set-Content -Path $profilePath -Value $hookBlock -NoNewline
+        }
         Write-Host "Done! A random pony quote will greet you on every new PowerShell session."
         Write-Host "To remove it later, delete the 'ponysay-go terminal greeting' block from $profilePath."
     }
