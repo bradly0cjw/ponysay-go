@@ -46,6 +46,25 @@ if [ -d "${HOME}/.config/ponysay" ]; then
     echo "Removed user configuration directory: ${HOME}/.config/ponysay"
 fi
 
+# Clean up terminal startup hooks from shell RC files
+MARKER="# ponysay-go terminal greeting"
+RC_FILES="${HOME}/.bashrc ${HOME}/.zshrc ${HOME}/.config/fish/config.fish"
+for rc in $RC_FILES; do
+    if [ -f "$rc" ] && grep -qF "$MARKER" "$rc" 2>/dev/null; then
+        # Remove the ponysay greeting block (marker line + following non-empty lines until blank line or EOF)
+        if [ "$(basename "$rc")" = "config.fish" ]; then
+            # Fish: remove from marker through 'end'
+            sed -i.bak "/$MARKER/,/^end$/d" "$rc" && rm -f "${rc}.bak"
+        else
+            # Bash/Zsh: remove the marker line and the if-then-fi one-liner
+            sed -i.bak "/$MARKER/{N;d;}" "$rc" && rm -f "${rc}.bak"
+        fi
+        # Remove any trailing blank line left behind
+        sed -i.bak -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$rc" 2>/dev/null && rm -f "${rc}.bak"
+        echo "Removed terminal startup hook from $rc"
+    fi
+done
+
 if [ "$REMOVED" -gt 0 ]; then
     echo "Successfully uninstalled ponysay & ponythink!"
 else

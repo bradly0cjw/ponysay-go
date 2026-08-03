@@ -1,4 +1,7 @@
 # ponysay-go installer script for Windows (PowerShell)
+param(
+    [switch]$Terminal
+)
 $ErrorActionPreference = 'Stop'
 
 $repo = "bradly0cjw/ponysay-go"
@@ -61,3 +64,29 @@ if ($pathEntries -notcontains $installDir.TrimEnd('\')) {
 Write-Host ""
 Write-Host "Try running:"
 Write-Host "    ponysay `"I am just the cutest pony!`""
+
+# 6. Terminal startup hook (-Terminal flag)
+if ($Terminal) {
+    $marker = '# ponysay-go terminal greeting'
+    $profilePath = $PROFILE.CurrentUserCurrentHost
+
+    if ($profilePath -and (Test-Path -Path $profilePath) -and (Select-String -Path $profilePath -Pattern ([regex]::Escape($marker)) -Quiet)) {
+        Write-Host ""
+        Write-Host "Terminal hook already present in $profilePath, skipping."
+    } else {
+        Write-Host ""
+        Write-Host "Adding ponysay startup hook to $profilePath..."
+        $profileDir = Split-Path -Path $profilePath -Parent
+        if (-not (Test-Path -Path $profileDir)) {
+            New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+        }
+        $hookBlock = @"
+
+$marker
+if (Get-Command ponysay -ErrorAction SilentlyContinue) { ponysay -q }
+"@
+        Add-Content -Path $profilePath -Value $hookBlock
+        Write-Host "Done! A random pony quote will greet you on every new PowerShell session."
+        Write-Host "To remove it later, delete the 'ponysay-go terminal greeting' block from $profilePath."
+    }
+}

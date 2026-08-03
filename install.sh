@@ -6,6 +6,14 @@ set -e
 
 REPO="bradly0cjw/ponysay-go"
 
+# 0. Parse arguments
+ENABLE_TERMINAL=0
+for arg in "$@"; do
+    case "$arg" in
+        --terminal) ENABLE_TERMINAL=1 ;;
+    esac
+done
+
 # 1. Detect OS
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$OS" in
@@ -91,3 +99,43 @@ fi
 echo ""
 echo "Try running:"
 echo "    ponysay 'I am just the cutest pony!'"
+
+# 6. Terminal startup hook (--terminal flag)
+if [ "$ENABLE_TERMINAL" -eq 1 ]; then
+    # Determine shell RC file
+    SHELL_NAME="$(basename "${SHELL:-/bin/sh}")"
+    case "$SHELL_NAME" in
+        zsh)  RC_FILE="${HOME}/.zshrc" ;;
+        bash) RC_FILE="${HOME}/.bashrc" ;;
+        fish) RC_FILE="${HOME}/.config/fish/config.fish" ;;
+        *)    RC_FILE="${HOME}/.bashrc" ;;
+    esac
+
+    MARKER="# ponysay-go terminal greeting"
+
+    if [ -f "$RC_FILE" ] && grep -qF "$MARKER" "$RC_FILE" 2>/dev/null; then
+        echo ""
+        echo "Terminal hook already present in ${RC_FILE}, skipping."
+    else
+        echo ""
+        echo "Adding ponysay startup hook to ${RC_FILE}..."
+        mkdir -p "$(dirname "$RC_FILE")"
+        if [ "$SHELL_NAME" = "fish" ]; then
+            cat >> "$RC_FILE" << 'FISHEOF'
+
+# ponysay-go terminal greeting
+if command -qs ponysay
+    ponysay -q
+end
+FISHEOF
+        else
+            cat >> "$RC_FILE" << 'SHEOF'
+
+# ponysay-go terminal greeting
+if command -v ponysay >/dev/null 2>&1; then ponysay -q; fi
+SHEOF
+        fi
+        echo "Done! A random pony quote will greet you on every new shell."
+        echo "To remove it later, delete the 'ponysay-go terminal greeting' block from ${RC_FILE}."
+    fi
+fi

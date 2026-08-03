@@ -56,6 +56,22 @@ irm https://raw.githubusercontent.com/bradly0cjw/ponysay-go/mane/install.ps1 | i
 
 *Detects OS and architecture automatically. Installs globally with admin/root privileges, or to user directory (`~/.local/bin` / `%LocalAppData%\Programs\ponysay`) without admin/root.*
 
+#### Terminal Greeting (Optional)
+
+Add `--terminal` to automatically hook `ponysay -q` into your shell startup, so a random pony quote greets you on every new terminal session:
+
+**Linux & macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/bradly0cjw/ponysay-go/mane/install.sh | bash -s -- --terminal
+```
+
+**Windows (PowerShell):**
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/bradly0cjw/ponysay-go/mane/install.ps1))) -Terminal
+```
+
+*Appends to `~/.bashrc`, `~/.zshrc`, `~/.config/fish/config.fish`, or your PowerShell `$PROFILE` depending on your shell. Idempotent — safe to re-run without duplicating the hook. The uninstall script automatically cleans it up.*
+
 <details>
 <summary>Manual & Alternative Installation Options</summary>
 
